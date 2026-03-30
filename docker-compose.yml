@@ -29,7 +29,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
-      - ./init-db:/docker-entrypoint-initdb.d
+      - ./docker/init-db:/docker-entrypoint-initdb.d
 
   kafka-connect:
     image: quay.io/debezium/connect:latest
