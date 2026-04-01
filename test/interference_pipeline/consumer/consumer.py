@@ -3,7 +3,7 @@ import json
 from confluent_kafka import Consumer, KafkaError
 
 
-def consumer_kafka_stream(topico: str,group_id: str):
+def consumer_kafka_stream(topic: str,group_id: str):
 
   bootstrap_servers = os.getenv('KAFKA_BOOTSTRAP_SERVER')
 
@@ -16,10 +16,9 @@ def consumer_kafka_stream(topico: str,group_id: str):
   consumer = Consumer(conf)
 
 
-  consumer.subscribe([topico])
+  consumer.subscribe([topic])
 
-  print(f"Conectado ao Kafka! Escutando novos registros no tópico: {topico}...")
-  print("Faça um INSERT no banco de dados para testar.\n")
+  print(f"Conected to kafka, listenin on topic: {topic}...")
 
 
   try:
@@ -31,9 +30,9 @@ def consumer_kafka_stream(topico: str,group_id: str):
     
       if msg.error():
         if msg.error().code() == KafkaError._PARTITION_EOF:
-          continue # Fim da fila, normal.
+          continue 
         else:
-          print(f"Erro no Kafka: {msg.error()}")
+          print(f"Error: {msg.error()}")
           break
     
       valor_byte = msg.value()
@@ -49,6 +48,6 @@ def consumer_kafka_stream(topico: str,group_id: str):
           yield registro_novo
 
   except KeyboardInterrupt:
-    print("Encerrando escuta")
+    print("Shutting down the pipeline")
   finally:
     consumer.close()

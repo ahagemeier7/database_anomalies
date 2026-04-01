@@ -1,52 +1,20 @@
-import json
-from confluent_kafka import Consumer, KafkaError
+import logging
+import os
+from dotenv import load_dotenv
+from training_pipeline.workers.worker_models import train_models
 
-conf = {
-  'bootstrap.servers' : 'localhost:9092',
-  'group.id': 'teste_conexao',     
-  'auto.offset.reset': 'latest' 
-}
+load_dotenv()
 
-consumer = Consumer(conf)
-
-TOPICO = 'source-postgres.public.clientes'
-
-consumer.subscribe([TOPICO])
-
-print(f"Conectado ao Kafka! Escutando novos registros no tópico: {TOPICO}...")
-print("Faça um INSERT no banco de dados para testar.\n")
+TARGET_TABLE = os.getenv("TARGET_TABLE")
+GROUP_ID = os.getenv("GROUP_ID")
 
 
-try:
-  while True:
-    msg = consumer.poll(timeout=1.0)
 
-    if msg is None:
-      continue
-  
-    if msg.error():
-      if msg.error().code() == KafkaError._PARTITION_EOF:
-        continue # Fim da fila, normal.
-      else:
-        print(f"Erro no Kafka: {msg.error()}")
-        break
-  
-    valor_byte = msg.value()
+#Training the models
+train_models(target_table=TARGET_TABLE)
 
-    if valor_byte:
-      dados = json.loads(valor_byte.decode('utf-8'))
+TRANSLATOR_PATH = f'models/{TARGET_TABLE}_translator.pkl'
 
-      operacao = dados.get('op')
+if not os.path.exists(TRANSLATOR_PATH):
+  logging.error(f"File not found: {TRANSLATOR_PATH}.")
 
-      if operacao in ['c','r']:
-        registro_novo = dados.get('after')
-
-        print("="*50)
-        print("Novo registro no banco!")
-        print(json.dumps(registro_novo,indent=4,ensure_ascii=False))
-        print("="*50 + "\n")
-
-except KeyboardInterrupt:
-  print("Encerrando escuta")
-finally:
-  consumer.close()
