@@ -24,18 +24,22 @@ class Worker:
       columns_to_ignore=self.columns_to_ignore
     )
 
-    ml_model: IsolationForest = joblib.load(MODEL_PATH)
 
-    logging.info(f"Worker started for the {self.target_table} pipeline.")
+    try:
+      ml_model: IsolationForest = joblib.load(MODEL_PATH)
 
-    for event_json in consumer_kafka_stream(
-      topico=KAFKA_TOPIC,
-      group_id=self.group_id
-    ):
+      logging.info(f"Worker started for the {self.target_table} pipeline.")
 
-      features = preprocessor.transform_json_to_features(event_json)
+      for event_json in consumer_kafka_stream(
+        topico=KAFKA_TOPIC,
+        group_id=self.group_id
+      ):
 
-      prediction = ml_model.predict(features)
+        features = preprocessor.transform_json_to_features(event_json)
 
-      if prediction[0] == -1:
-        print("Calling Anomaly_handler")
+        prediction = ml_model.predict(features)
+
+        if prediction[0] == -1:
+          print("Calling Anomaly_handler")
+    except Exception as e:
+      logging.error(f"An unexpected error occured while predicting the features: {e}")

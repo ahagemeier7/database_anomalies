@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from confluent_kafka import Consumer, KafkaError
 
 
@@ -15,11 +16,9 @@ def consumer_kafka_stream(topic: str,group_id: str):
 
   consumer = Consumer(conf)
 
-
   consumer.subscribe([topic])
 
   print(f"Conected to kafka, listenin on topic: {topic}...")
-
 
   try:
     while True:
@@ -46,8 +45,9 @@ def consumer_kafka_stream(topic: str,group_id: str):
           registro_novo = dados.get('after')
 
           yield registro_novo
-
+  except Exception as e:
+    logging.error(f"An unexpected error occured while listening to kafka stream: {e}")
   except KeyboardInterrupt:
-    print("Shutting down the pipeline")
+    logging.warning("Shutting down the pipeline by user request")
   finally:
     consumer.close()
