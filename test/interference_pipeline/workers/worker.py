@@ -3,7 +3,9 @@ from typing import List
 import joblib
 from preprocessing_data.preprocess_data import DynamicPreprocessor
 from consumer.consumer import consumer_kafka_stream
+from producer.producer import producer_kafka_stream
 from sklearn.ensemble import IsolationForest
+from datetime import datetime, timezone
 
 
 class Worker:
@@ -40,6 +42,21 @@ class Worker:
         prediction = ml_model.predict(features)
 
         if prediction[0] == -1:
-          print("Calling Anomaly_handler")
+          logging.info("Anomaly detected, sending to kafka")
+
+          payload_anomaly = {
+            "id_alerta": f"ALRT-{event_json.get('id', 'N/A')}",
+            "timestamp_deteccao": datetime.now(timezone.utc).isoformat(),
+            "origem": {
+                "tabela": self.target_table,
+                "topico_fonte": KAFKA_TOPIC
+            },
+            "modelo_ml": "IsolationForest_v1",
+            "status": "pendente_revisao",
+            "evento_bruto": event_json 
+          }
+
+          producer_kafka_stream(topic="detected_anomalies",payload=payload_anomaly)
+
     except Exception as e:
       logging.error(f"An unexpected error occured while predicting the features: {e}")
