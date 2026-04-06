@@ -1,9 +1,9 @@
 import logging
 from typing import List
 import joblib
-from preprocessing_data.preprocess_data import DynamicPreprocessor
-from consumer.consumer import consumer_kafka_stream
-from producer.producer import producer_kafka_stream
+from anomaly_detector.test.interference_pipeline.preprocessing_data.preprocess_data import DynamicPreprocessor
+from anomaly_detector.test.interference_pipeline.consumer.consumer import consumer_kafka_stream
+from anomaly_detector.test.interference_pipeline.producer.producer import producer_kafka_stream
 from sklearn.ensemble import IsolationForest
 from datetime import datetime, timezone
 
@@ -45,15 +45,15 @@ class Worker:
           logging.info("Anomaly detected, sending to kafka")
 
           payload_anomaly = {
-            "id_alerta": f"ALRT-{event_json.get('id', 'N/A')}",
-            "timestamp_deteccao": datetime.now(timezone.utc).isoformat(),
-            "origem": {
-                "tabela": self.target_table,
-                "topico_fonte": KAFKA_TOPIC
+            "id": f"ALRT-{event_json.get('id', 'N/A')}",
+            "timestamp_detection": datetime.now(timezone.utc).isoformat(),
+            "origin": {
+                "table": self.target_table,
+                "source_topic": KAFKA_TOPIC
             },
-            "modelo_ml": "IsolationForest_v1",
-            "status": "pendente_revisao",
-            "evento_bruto": event_json 
+            "ml_model": "IsolationForest_v1",
+            "status": "pending_revision",
+            "raw_event": event_json 
           }
 
           producer_kafka_stream(topic="detected_anomalies",payload=payload_anomaly)
