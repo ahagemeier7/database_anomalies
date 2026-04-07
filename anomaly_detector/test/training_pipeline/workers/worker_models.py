@@ -26,5 +26,5 @@ def train_models(target_table: str) -> None:
   i_forest.fit(X_practice)
 
   #Saving both models
-  joblib.dump(translator,f'models/{target_table}_translator.pkl')
-  joblib.dump(translator,f'models/{target_table}_model.pkl')
+  joblib.dump(translator,f'./models/{target_table}_translator.pkl')
+  joblib.dump(translator,f'./models/{target_table}_model.pkl')
