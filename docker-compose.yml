@@ -71,7 +71,7 @@ services:
       - KAFKA_GROUP_ID=grupo_worker_transacoes
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
     volumes:
-      - ./Anomaly_detector/models:/app/models # Mapeia os .pkl para dentro do container
+      - ./Anomaly_detector/models:/app/models 
     depends_on:
       - kafka
 
