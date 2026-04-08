@@ -1,7 +1,6 @@
 import os
 import smtplib
 import logging
-from typing import List
 from email.message import EmailMessage
 from anomaly_handler.test.consumer.consumer import anomaly_consumer_kafka
 
@@ -12,7 +11,7 @@ class AnomalyHandler:
 
     self.sender_email = os.getenv("SENDER_EMAIL")
     self.reciever_email = os.getenv("RECIEVER_EMAIL")
-    self.password = os.getenv("PASSWORD")
+    self.password = os.getenv("EMAIL_PASSWORD")
 
   def handle_anomalies(self):
     KAFKA_TOPIC = f"detected_anomalies"

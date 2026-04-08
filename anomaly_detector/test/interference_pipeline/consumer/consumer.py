@@ -6,7 +6,7 @@ from confluent_kafka import Consumer, KafkaError
 
 def consumer_kafka_stream(topic: str,group_id: str):
 
-  bootstrap_servers = os.getenv('KAFKA_BOOTSTRAP_SERVER')
+  bootstrap_servers = os.getenv('KAFKA_BOOTSTRAP_SERVERS')
 
   conf = {
     'bootstrap.servers' : bootstrap_servers,

@@ -1,3 +1,4 @@
+#--================Kafka================--#
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
@@ -59,3 +60,32 @@ services:
     depends_on:
       - kafka
       - kafka-connect
+
+#--================Workers================--#
+  worker-transacoes:
+    build: 
+      context: ./Anomaly_detector
+    container_name: worker_transacoes
+    environment:
+      - TABELA_ALVO=transacoes
+      - KAFKA_GROUP_ID=grupo_worker_transacoes
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+    volumes:
+      - ./Anomaly_detector/models:/app/models # Mapeia os .pkl para dentro do container
+    depends_on:
+      - kafka
+
+#--================Handler================--#
+
+anomaly-handler:
+    build: 
+      context: ./Anomaly_handler 
+    container_name: anomaly_handler
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SENDER_EMAIL=seu_email@gmail.com
+      - PASSWORD=sua_senha_de_app
+      - RECIEVER_EMAIL=equipe_fraude@empresa.com
+    depends_on:
+      - kafka
+      - postgres

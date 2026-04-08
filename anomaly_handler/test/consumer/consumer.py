@@ -8,7 +8,7 @@ load_dotenv()
 
 def anomaly_consumer_kafka(topic:str,group_id:str):
 
-  bootstrap_server = os.getenv("KAFKA_BOOTSTRAP_SERVER")
+  bootstrap_server = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
 
   conf = {
     'bootstrap.servers' : bootstrap_server,

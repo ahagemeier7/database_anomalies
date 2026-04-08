@@ -3,7 +3,7 @@ from typing import List
 import joblib
 from anomaly_detector.test.interference_pipeline.preprocessing_data.preprocess_data import DynamicPreprocessor
 from anomaly_detector.test.interference_pipeline.consumer.consumer import consumer_kafka_stream
-from anomaly_detector.test.interference_pipeline.producer.producer import producer_kafka_stream
+from anomaly_detector.test.interference_pipeline.producer.producer import AnomalyProducer
 from sklearn.ensemble import IsolationForest
 from datetime import datetime, timezone
 
@@ -15,6 +15,8 @@ class Worker:
 
     self.group_id = group_id
     self.columns_to_ignore = columns_to_ignore or ['id'] 
+
+    self.anomaly_producer = AnomalyProducer()
 
   def start_detection(self) -> None:
     MODEL_PATH = f"models/{self.target_table}_model.pkl"
@@ -56,7 +58,10 @@ class Worker:
             "raw_event": event_json 
           }
 
-          producer_kafka_stream(topic="detected_anomalies",payload=payload_anomaly)
+          self.anomaly_producer.send_anomaly(
+            topic="detected_anomalies", 
+            payload=payload_anomaly
+          )
 
     except Exception as e:
       logging.error(f"An unexpected error occured while predicting the features: {e}")
