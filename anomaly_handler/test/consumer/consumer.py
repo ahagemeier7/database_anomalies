@@ -18,7 +18,7 @@ def anomaly_consumer_kafka(topic:str,group_id:str):
 
   consumer = Consumer(conf)
 
-  consumer.subscribe(topics=topic)
+  consumer.subscribe([topic])
 
   try:
     while True:
@@ -39,12 +39,8 @@ def anomaly_consumer_kafka(topic:str,group_id:str):
       if valor_byte:
         data = json.loads(valor_byte.decode('utf-8'))
 
-        operation = data.get('op')
+        yield data
 
-        if operation in ['c','r']:
-          new_registry = data.get('after')
-
-          yield new_registry
   except Exception as e:
     logging.error(f"An unexpected error occured while listening to kafka stream: {e}")
   except KeyboardInterrupt:

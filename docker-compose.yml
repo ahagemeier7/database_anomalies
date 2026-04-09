@@ -26,9 +26,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=db
     volumes:
       - ./docker/init-db:/docker-entrypoint-initdb.d
 
@@ -62,13 +62,13 @@ services:
       - kafka-connect
 
 #--================Workers================--#
-  worker-transacoes:
+  worker-expenses:
     build: 
       context: ./Anomaly_detector
-    container_name: worker_transacoes
+    container_name: worker_expenses
     environment:
-      - TABELA_ALVO=transacoes
-      - KAFKA_GROUP_ID=grupo_worker_transacoes
+      - TABELA_ALVO=despesas
+      - KAFKA_GROUP_ID=group_worker_expenses
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
     volumes:
       - ./Anomaly_detector/models:/app/models 
@@ -77,7 +77,7 @@ services:
 
 #--================Handler================--#
 
-anomaly-handler:
+  anomaly-handler:
     build: 
       context: ./Anomaly_handler 
     container_name: anomaly_handler
@@ -86,6 +86,7 @@ anomaly-handler:
       - SENDER_EMAIL=seu_email@gmail.com
       - PASSWORD=sua_senha_de_app
       - RECIEVER_EMAIL=equipe_fraude@empresa.com
+      - KAFKA_GROUP_ID=group_anomaly_handler
     depends_on:
       - kafka
       - postgres

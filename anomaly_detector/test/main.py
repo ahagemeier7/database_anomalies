@@ -1,8 +1,8 @@
 import logging
 import os
 from dotenv import load_dotenv
-from anomaly_detector.test.training_pipeline.workers.worker_models import train_models
-from anomaly_detector.test.interference_pipeline.workers.worker import Worker
+from training_pipeline.workers.worker_models import train_models
+from interference_pipeline.workers.worker import Worker
 
 load_dotenv()
 

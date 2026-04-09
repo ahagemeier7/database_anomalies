@@ -1,11 +1,11 @@
 import os
 import logging
 from dotenv import load_dotenv
-from anomaly_handler.test.handler.handler import AnomalyHandler
+from test.handler.handler import AnomalyHandler
 
 load_dotenv()
 
-GROUP_ID= os.getenv("GROUP_ID")
+GROUP_ID= os.getenv("KAFKA_GROUP_ID")
 
 handler = AnomalyHandler(group_id=GROUP_ID)
 

@@ -1,9 +1,9 @@
 import logging
 from typing import List
 import joblib
-from anomaly_detector.test.interference_pipeline.preprocessing_data.preprocess_data import DynamicPreprocessor
-from anomaly_detector.test.interference_pipeline.consumer.consumer import consumer_kafka_stream
-from anomaly_detector.test.interference_pipeline.producer.producer import AnomalyProducer
+from interference_pipeline.preprocessing_data.preprocess_data import DynamicPreprocessor
+from interference_pipeline.consumer.consumer import consumer_kafka_stream
+from interference_pipeline.producer.producer import AnomalyProducer
 from sklearn.ensemble import IsolationForest
 from datetime import datetime, timezone
 

@@ -2,7 +2,7 @@ import os
 import smtplib
 import logging
 from email.message import EmailMessage
-from anomaly_handler.test.consumer.consumer import anomaly_consumer_kafka
+from ..consumer.consumer import anomaly_consumer_kafka
 
 class AnomalyHandler:
   
@@ -17,7 +17,7 @@ class AnomalyHandler:
     KAFKA_TOPIC = f"detected_anomalies"
 
     for event_json in anomaly_consumer_kafka(
-      topico=KAFKA_TOPIC,
+      topic=KAFKA_TOPIC,
       group_id=self.group_id
       ):
       
