@@ -35,9 +35,10 @@ class Worker:
       logging.info(f"Worker started for the {self.target_table} pipeline.")
 
       for event_json in consumer_kafka_stream(
-        topico=KAFKA_TOPIC,
+        topic=KAFKA_TOPIC,
         group_id=self.group_id
       ):
+        logging.info(f"Stream received from Kafka! Processing payload ID: {event_json.get('id', 'Unknown')}")
 
         features = preprocessor.transform_json_to_features(event_json)
 

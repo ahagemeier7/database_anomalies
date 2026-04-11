@@ -1,0 +1,9 @@
+%3|1775941555.310|FAIL|rdkafka#producer-1| [thrd:kafka:29092/bootstrap]: kafka:29092/bootstrap: Connect to ipv4#172.18.0.4:29092 failed: Connection refused (after 1ms in state CONNECT)
+2026-04-11 21:05:55,403 - INFO - Worker started for the despesas pipeline.
+Conected to kafka, listenin on topic: source-postgres.public.despesas...
+%3|1775941555.405|FAIL|rdkafka#consumer-2| [thrd:kafka:29092/bootstrap]: kafka:29092/bootstrap: Connect to ipv4#172.18.0.4:29092 failed: Connection refused (after 1ms in state CONNECT)
+%3|1775941556.306|FAIL|rdkafka#producer-1| [thrd:kafka:29092/bootstrap]: kafka:29092/bootstrap: Connect to ipv4#172.18.0.4:29092 failed: Connection refused (after 0ms in state CONNECT, 1 identical error(s) suppressed)
+%3|1775941556.403|FAIL|rdkafka#consumer-2| [thrd:kafka:29092/bootstrap]: kafka:29092/bootstrap: Connect to ipv4#172.18.0.4:29092 failed: Connection refused (after 0ms in state CONNECT, 1 identical error(s) suppressed)
+2026-04-11 21:07:32,471 - INFO - Stream received from Kafka! Processing payload ID: 6
+2026-04-11 21:07:32,474 - INFO - Stream received from Kafka! Processing payload ID: 7
+2026-04-11 21:07:32,476 - INFO - Stream received from Kafka! Processing payload ID: 8

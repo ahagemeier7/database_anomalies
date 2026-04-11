@@ -14,7 +14,7 @@ class AnomalyProducer:
   Class that keeps an open connection with kafka to send the anomaly messages
   """
   def __init__(self):
-    self.kafka_server = os.getenv('KAFKA_BOOTSTRAP_SERVER')
+    self.kafka_server = os.getenv('KAFKA_BOOTSTRAP_SERVERS')
 
     self.producer = Producer({'bootstrap.servers': self.kafka_server}) 
 

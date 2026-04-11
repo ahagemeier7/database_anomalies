@@ -22,7 +22,7 @@ services:
   postgres:
     build:
       context: Docker
-      dockerfile: db.dockerfile
+      dockerfile: db.Dockerfile
     ports:
       - "5432:5432"
     environment:
@@ -30,7 +30,7 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=db
     volumes:
-      - ./docker/init-db:/docker-entrypoint-initdb.d
+      - ./Docker/init-db:/docker-entrypoint-initdb.d
 
   kafka-connect:
     image: quay.io/debezium/connect:latest
@@ -64,14 +64,20 @@ services:
 #--================Workers================--#
   worker-expenses:
     build: 
-      context: ./Anomaly_detector
+      context: ./anomaly_detector
     container_name: worker_expenses
+    restart: on-failure
     environment:
-      - TABELA_ALVO=despesas
-      - KAFKA_GROUP_ID=group_worker_expenses
+      - TARGET_TABLE=despesas
+      - GROUP_ID=group_worker_expenses
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=db
+      - POSTGRES_SERVER=postgres:5432
+      - COLUMNS_TO_IGNORE=id
     volumes:
-      - ./Anomaly_detector/models:/app/models 
+      - ./anomaly_detector/test/models:/app/models 
     depends_on:
       - kafka
 
@@ -79,12 +85,13 @@ services:
 
   anomaly-handler:
     build: 
-      context: ./Anomaly_handler 
+      context: ./anomaly_handler 
     container_name: anomaly_handler
+    restart: on-failure
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       - SENDER_EMAIL=seu_email@gmail.com
-      - PASSWORD=sua_senha_de_app
+      - EMAIL_PASSWORD=sua_senha_de_app
       - RECIEVER_EMAIL=equipe_fraude@empresa.com
       - KAFKA_GROUP_ID=group_anomaly_handler
     depends_on:

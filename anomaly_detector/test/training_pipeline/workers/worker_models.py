@@ -18,7 +18,15 @@ def train_models(target_table: str,columns_to_ignore:list = None) -> None:
     logging.error(f"Error connecting to the database: {e}")
     raise
 
-  df_clean = df.drop(columns=columns_to_ignore, errors='ignore')
+  if columns_to_ignore:
+    df_clean = df.drop(columns=columns_to_ignore, errors='ignore')
+  else:
+    df_clean = df
+
+  # Prevent Timestamp types from crashing DictVectorizer
+  for col in df_clean.columns:
+    if pd.api.types.is_datetime64_any_dtype(df_clean[col]):
+      df_clean[col] = df_clean[col].astype(str)
 
   data_dict = df_clean.to_dict(orient='records')
 
@@ -27,11 +35,10 @@ def train_models(target_table: str,columns_to_ignore:list = None) -> None:
   X_practice = translator.fit_transform(data_dict)
 
   #Instantianting the ML model
-  i_forest = IsolationForest(contamination=0.01,random_state=42)
+  i_forest = IsolationForest(contamination='auto',random_state=42)
   i_forest.fit(X_practice)
 
-  base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-  models_dir = os.path.join(base_dir, 'models')
+  models_dir = os.path.join(os.getcwd(), 'models')
     
   os.makedirs(models_dir, exist_ok=True)
 

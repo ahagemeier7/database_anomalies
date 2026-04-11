@@ -18,6 +18,13 @@ class DynamicPreprocessor:
     #Assuring that the models wont use useless columns like ids or raw dates as features
     clean_json = {k: v for k,v in kafka_json.items() if k not in self.columns_to_ignore}
 
+    for k, v in clean_json.items():
+        if isinstance(v, str):
+            try:
+                clean_json[k] = float(v)
+            except ValueError:
+                pass
+
     features = self.translator.transform([clean_json])
 
     return features

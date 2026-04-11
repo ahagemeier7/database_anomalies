@@ -13,7 +13,8 @@ def anomaly_consumer_kafka(topic:str,group_id:str):
   conf = {
     'bootstrap.servers' : bootstrap_server,
     'group.id': group_id,     
-    'auto.offset.reset': 'latest' 
+    'auto.offset.reset': 'latest',
+    'allow.auto.create.topics': True
   }
 
   consumer = Consumer(conf)
@@ -28,7 +29,7 @@ def anomaly_consumer_kafka(topic:str,group_id:str):
         continue
 
       if msg.error():
-        if msg.error().code() == KafkaError._PARTITION_EOF:
+        if msg.error().code() in (KafkaError._PARTITION_EOF, KafkaError.UNKNOWN_TOPIC_OR_PART):
           continue 
         else:
           print(f"Error: {msg.error()}")
