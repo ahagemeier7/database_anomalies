@@ -23,6 +23,8 @@ def train_models(target_table: str,columns_to_ignore:list = None) -> None:
   else:
     df_clean = df
 
+  df_clean = df_clean.apply(pd.to_numeric, errors='ignore')
+
   # Prevent Timestamp types from crashing DictVectorizer
   for col in df_clean.columns:
     if pd.api.types.is_datetime64_any_dtype(df_clean[col]):
@@ -35,7 +37,7 @@ def train_models(target_table: str,columns_to_ignore:list = None) -> None:
   X_practice = translator.fit_transform(data_dict)
 
   #Instantianting the ML model
-  i_forest = IsolationForest(contamination='auto',random_state=42)
+  i_forest = IsolationForest(contamination=0.1,random_state=42)
   i_forest.fit(X_practice)
 
   models_dir = os.path.join(os.getcwd(), 'models')

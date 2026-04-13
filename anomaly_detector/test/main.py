@@ -10,8 +10,9 @@ load_dotenv()
 TARGET_TABLE = os.getenv("TARGET_TABLE")
 GROUP_ID = os.getenv("GROUP_ID")
 COLUMNS_TO_IGNORE_ENV = os.getenv("COLUMNS_TO_IGNORE")
+
 if COLUMNS_TO_IGNORE_ENV:
-    COLUMNS_TO_IGNORE = COLUMNS_TO_IGNORE_ENV.split(',')
+    COLUMNS_TO_IGNORE =[col.strip() for col in COLUMNS_TO_IGNORE_ENV.split(',')]
 else:
     COLUMNS_TO_IGNORE = None
 

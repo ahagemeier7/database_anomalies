@@ -75,11 +75,12 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=db
       - POSTGRES_SERVER=postgres:5432
-      - COLUMNS_TO_IGNORE=id
+      - COLUMNS_TO_IGNORE=id,descricao
     volumes:
       - ./anomaly_detector/test/models:/app/models 
     depends_on:
       - kafka
+      - postgres
 
 #--================Handler================--#
 
