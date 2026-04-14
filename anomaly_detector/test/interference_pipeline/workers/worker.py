@@ -10,12 +10,12 @@ from datetime import datetime, timezone
 
 class Worker:
 
-  def __init__(self,target_table:str,group_id:str,columns_to_ignore: List[str]):
+  def __init__(self,target_table:str,group_id:str,columns_to_ignore: List[str],date_columns:List[str] = None):
     self.target_table = target_table
 
     self.group_id = group_id
     self.columns_to_ignore = columns_to_ignore or ['id'] 
-
+    self.date_columns = date_columns or []
     self.anomaly_producer = AnomalyProducer()
 
   def start_detection(self) -> None:
@@ -27,7 +27,6 @@ class Worker:
       table_name=self.target_table,
       columns_to_ignore=self.columns_to_ignore
     )
-
 
     try:
       ml_model: IsolationForest = joblib.load(MODEL_PATH)
@@ -46,6 +45,13 @@ class Worker:
 
         if prediction[0] == -1:
           logging.info("Anomaly detected, sending to kafka")
+
+          for col in self.date_columns:
+              date_value = event_json.get(col)
+              if date_value and isinstance(date_value, int):
+                  # Converting microseconds to date 
+                  dt = datetime.fromtimestamp(date_value / 1_000_000.0, tz=timezone.utc)
+                  event_json[col] = dt.strftime('%d/%m/%Y %H:%M:%S')
 
           payload_anomaly = {
             "id": f"ALRT-{event_json.get('id', 'N/A')}",

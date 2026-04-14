@@ -76,6 +76,7 @@ services:
       - POSTGRES_DB=db
       - POSTGRES_SERVER=postgres:5432
       - COLUMNS_TO_IGNORE=id,descricao
+      - DATE_COLUMNS=data_hora
     volumes:
       - ./anomaly_detector/test/models:/app/models 
     depends_on:

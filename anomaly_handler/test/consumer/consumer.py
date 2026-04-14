@@ -13,7 +13,7 @@ def anomaly_consumer_kafka(topic:str,group_id:str):
   conf = {
     'bootstrap.servers' : bootstrap_server,
     'group.id': group_id,     
-    'auto.offset.reset': 'latest',
+    'auto.offset.reset': 'earliest',
     'allow.auto.create.topics': True
   }
 
