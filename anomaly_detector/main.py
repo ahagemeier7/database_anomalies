@@ -55,11 +55,10 @@ worker = WorkerClass(
 )
 
 
-try:
-  #Starting anomaly detection
-  worker.start_detection()
-except Exception as e:
-  logging.error(f"An error has occured while searching for anomalies: {e}")
+
+#Starting anomaly detection
+worker.start_detection()
+
 
   
 
