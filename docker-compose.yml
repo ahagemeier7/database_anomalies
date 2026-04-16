@@ -75,6 +75,7 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=db
       - POSTGRES_SERVER=postgres:5432
+      - PRODUCTION=false
       - COLUMNS_TO_IGNORE=id,descricao
       - DATE_COLUMNS=data_hora
     volumes:
@@ -95,6 +96,7 @@ services:
       - SENDER_EMAIL=seu_email@gmail.com
       - EMAIL_PASSWORD=sua_senha_de_app
       - RECIEVER_EMAIL=equipe_fraude@empresa.com
+      - PRODUCTION=false
       - KAFKA_GROUP_ID=group_anomaly_handler
     depends_on:
       - kafka
