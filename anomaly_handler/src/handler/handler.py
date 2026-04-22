@@ -2,7 +2,9 @@ import os
 import smtplib
 import logging
 from email.message import EmailMessage
+from sqlalchemy import text
 from ..consumer.consumer import anomaly_consumer_kafka
+from db.db import get_db_engine
 import json
 
 class AnomalyHandler:
@@ -13,6 +15,11 @@ class AnomalyHandler:
     self.sender_email = os.getenv("SENDER_EMAIL")
     self.reciever_email = os.getenv("RECIEVER_EMAIL")
     self.password = os.getenv("EMAIL_PASSWORD")
+
+    self.db_engine = get_db_engine()
+
+    self._create_history_table()
+
 
   def handle_anomalies(self):
     KAFKA_TOPIC = f"detected_anomalies"
@@ -35,6 +42,8 @@ class AnomalyHandler:
           f"Table: '{table}' (Record ID: {db_record_id}) | "
           f"Model: {model} | Action: Dispatching Email..."
         )
+
+      self._save_to_db(event_json)
 
       msg = self._email_assembler(event_json)
 
@@ -120,3 +129,51 @@ class AnomalyHandler:
       msg.add_alternative(html_content, subtype='html')
 
       return msg
+    
+  def _create_history_table(self):
+      """Create the anomalies_history table"""
+      query = text("""
+          CREATE TABLE IF NOT EXISTS anomalies_history (
+              alert_id VARCHAR(100) PRIMARY KEY,
+              timestamp_detection TIMESTAMP,
+              origin_table VARCHAR(100),
+              source_topic VARCHAR(200),
+              ml_model VARCHAR(100),
+              status VARCHAR(50),
+              raw_event JSONB 
+          );
+      """)
+      try:
+          with self.db_engine.connect() as conn:
+              conn.execute(query)
+              conn.commit()
+      except Exception as e:
+          logging.error(f"Failed to create anomalies_history table: {e}")
+
+  def _save_to_db(self, event_json):
+      """Saving the json into postgres"""
+      query = text("""
+          INSERT INTO anomalies_history 
+          (alert_id, timestamp_detection, origin_table, source_topic, ml_model, status, raw_event)
+          VALUES 
+          (:alert_id, :timestamp_detection, :origin_table, :source_topic, :ml_model, :status, :raw_event)
+          ON CONFLICT (alert_id) DO NOTHING; 
+      """)
+      
+      params = {
+          "alert_id": event_json.get('id', 'N/A'),
+          "timestamp_detection": event_json.get('timestamp_detection'),
+          "origin_table": event_json.get('origin', {}).get('table', 'unknown'),
+          "source_topic": event_json.get('origin', {}).get('source_topic', 'unknown'),
+          "ml_model": event_json.get('ml_model', 'N/A'),
+          "status": event_json.get('status', 'unknown'),
+          "raw_event": json.dumps(event_json.get('raw_event', {}))
+      }
+
+      try:
+          with self.db_engine.connect() as conn:
+              conn.execute(query, params)
+              conn.commit()
+          logging.info(f"Anomaly[{params['alert_id']}] successfully saved to database.")
+      except Exception as e:
+          logging.error(f"Database insertion failed for anomaly [{params['alert_id']}]: {e}")

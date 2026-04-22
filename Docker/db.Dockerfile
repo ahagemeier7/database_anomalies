@@ -1,7 +1,0 @@
-FROM postgres:15-alpine
-
-# Copiamos o arquivo de configuração para dentro da imagem
-COPY --chown=postgres:postgres postgresql.conf /etc/postgresql/postgresql.conf
-
-# Comando para iniciar o Postgres usando o nosso arquivo de configuração
-CMD ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]

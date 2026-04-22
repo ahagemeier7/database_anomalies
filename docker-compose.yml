@@ -19,18 +19,24 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
-  postgres:
-    build:
-      context: Docker
-      dockerfile: db.Dockerfile
+  postgres-source:
+    image: postgres:15-alpine
     ports:
       - "5432:5432"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=db
-    volumes:
-      - ./Docker/init-db:/docker-entrypoint-initdb.d
+      - POSTGRES_DB=db_real
+    command: ["postgres", "-c", "wal_level=logical"]
+
+  postgres-internal:
+    image: postgres:15-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=admin_fraude
+      - POSTGRES_PASSWORD=senha_segura
+      - POSTGRES_DB=db_seguranca
 
   kafka-connect:
     image: quay.io/debezium/connect:latest
@@ -45,7 +51,7 @@ services:
       - STATUS_STORAGE_TOPIC=my_connect_statuses
     depends_on:
       - kafka
-      - postgres
+      - postgres-source
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -68,21 +74,28 @@ services:
     container_name: worker_expenses
     restart: on-failure
     environment:
-      - TARGET_TABLE=despesas
-      - GROUP_ID=group_worker_expenses
+      - GROUP_ID=group_worker_creditcard
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      
+      #Changing the table name that the data will come
+      - TARGET_TABLE=credit_card_transactions
+      
+      #Database connection variables
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=db
-      - POSTGRES_SERVER=postgres:5432
-      - PRODUCTION=false
-      - COLUMNS_TO_IGNORE=id,descricao
-      - DATE_COLUMNS=data_hora
+      - POSTGRES_DB=db_real 
+      - POSTGRES_SERVER=postgres-source:5432 
+      
+      #Defining the columns that the Model should not see
+      - COLUMNS_TO_IGNORE=id,Time,Class 
+
+      #If the table have date columns, you need to add the names separated with comma
+      # - DATE_COLUMNS=
     volumes:
       - ./anomaly_detector/test/models:/app/models 
     depends_on:
       - kafka
-      - postgres
+      - postgres-source
 
 #--================Handler================--#
 
@@ -98,6 +111,10 @@ services:
       - RECIEVER_EMAIL=equipe_fraude@empresa.com
       - PRODUCTION=false
       - KAFKA_GROUP_ID=group_anomaly_handler
+      - POSTGRES_USER=admin_fraude
+      - POSTGRES_PASSWORD=senha_segura
+      - POSTGRES_DB=db_seguranca 
+      - POSTGRES_SERVER=postgres-internal:5432
     depends_on:
       - kafka
-      - postgres
+      - postgres-internal
