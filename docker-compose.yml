@@ -68,10 +68,10 @@ services:
       - kafka-connect
 
 #--================Workers================--#
-  worker-expenses:
+  worker-transactions:
     build: 
       context: ./anomaly_detector
-    container_name: worker_expenses
+    container_name: worker_transactions
     restart: on-failure
     environment:
       - GROUP_ID=group_worker_creditcard
@@ -92,7 +92,7 @@ services:
       #If the table have date columns, you need to add the names separated with comma
       # - DATE_COLUMNS=
     volumes:
-      - ./anomaly_detector/test/models:/app/models 
+      - ./anomaly_detector/src/models:/app/models 
     depends_on:
       - kafka
       - postgres-source

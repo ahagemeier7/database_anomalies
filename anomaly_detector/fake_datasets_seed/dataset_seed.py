@@ -1,11 +1,20 @@
+import os
 import pandas as pd
 from sqlalchemy import create_engine, text
 
+#https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud
+
 engine = create_engine("postgresql://postgres:postgres@localhost:5432/db_real")
 
-df = pd.read_csv('creditcard.csv')
+diretorio_atual = os.path.dirname(os.path.abspath(__file__))
 
-df_normal = df[df['Class'] == 0].head(50000)
+# 2. Monta o caminho completo até o CSV
+caminho_csv = os.path.join(diretorio_atual, 'creditcard.csv')
+
+# 3. Lê usando o caminho completo
+df = pd.read_csv(caminho_csv)
+
+df_normal = df[df['Class'] == 0].head(50000).reset_index(drop=True)
 df_fraude = df[df['Class'] == 1]
 
 
