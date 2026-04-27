@@ -5,6 +5,9 @@ from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+#Implemented from scratch
+from Models.RandomForest import RandomForest
+
 df = pd.read_csv("ModelTesting/creditcard.csv")
 
 df = pd.concat([df[df['Class'] == 0].head(50000), df[df['Class'] == 1]])
@@ -128,6 +131,50 @@ sns.histplot(data=df_graph,
              kde=True, 
              palette={0:'blue', 1:'red'})
 
+
 plt.title('Probability of a fraud (0.0 = 0% | 1.0 = 100%)')
 plt.xlabel('Fraud chance (Above .5 the model blocks)')
+plt.show()
+
+
+
+
+#-------------------------------------------------------------
+
+df = pd.concat([df[df['Class'] == 0].head(5000), df[df['Class'] == 1]])
+
+X = df.drop(columns=['id', 'Time', 'Class'], errors='ignore')
+y_true = df['Class']
+
+
+X_train, X_test, y_train, y_test = train_test_split(X, y_true, test_size=0.3, random_state=42, stratify=y_true)
+
+X_train_np = X_train.values
+y_train_np = y_train.values
+X_test_np = X_test.values
+y_test_np = y_test.values
+
+
+rf_scratch = RandomForest(n_trees=3, max_depth=5, min_samples_split=2)
+
+rf_scratch.fit(X_train_np, y_train_np)
+
+y_prediction = rf_scratch.predict(X_test_np)
+
+
+print(classification_report(y_test_np, y_prediction, target_names=['Normal','Fraud']))
+
+# ==============================================================
+# Confusion matrix
+# ==============================================================
+plt.figure(figsize=(8,6))
+cm = confusion_matrix(y_test_np, y_prediction)
+
+sns.heatmap(cm, annot=True, fmt='d', cmap='Purples',
+            xticklabels=['Prediction Normal','Prediction Fraud'],
+            yticklabels=['Real Normal','Real Fraud'])
+
+plt.title('Confusion matrix - Random forest (From Scratch)')
+plt.ylabel('Real')
+plt.xlabel('prediction')
 plt.show()
