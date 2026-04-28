@@ -3,7 +3,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 import os
 from dotenv import load_dotenv
 from src.training_pipeline.workers.worker_models import train_models
-from src.interference_pipeline.workers.worker import Worker
+from anomaly_detector.src.interference_pipeline.worker import Worker
 
 load_dotenv()
 

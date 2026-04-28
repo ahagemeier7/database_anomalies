@@ -2,7 +2,7 @@ import os
 import logging
 import joblib
 from sklearn.feature_extraction import DictVectorizer
-from sklearn.ensemble import IsolationForest
+from sklearn.ensemble import IsolationForest,RandomForestClassifier
 from training_pipeline.db.db import get_db_engine
 import pandas as pd
 
