@@ -81,11 +81,18 @@ services:
       - TARGET_TABLE=credit_card_transactions
       
       #Database connection variables
+      #Source Database
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=db_real 
       - POSTGRES_SERVER=postgres-source:5432 
       
+      #Internal Database
+      - POSTGRES_USER_INTERNAL=admin_fraude
+      - POSTGRES_PASSWORD_INTERNAL=senha_segura
+      - POSTGRES_DB_INTERNAL=db_seguranca 
+      - POSTGRES_SERVER_INTERNAL=postgres-internal:5432
+
       #Defining the columns that the Model should not see
       - COLUMNS_TO_IGNORE=id,Time,Class 
 

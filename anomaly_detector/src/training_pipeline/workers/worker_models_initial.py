@@ -2,8 +2,8 @@ import os
 import logging
 import joblib
 from sklearn.feature_extraction import DictVectorizer
-from sklearn.ensemble import IsolationForest,RandomForestClassifier
-from training_pipeline.db.db import get_db_engine
+from sklearn.ensemble import IsolationForest
+from anomaly_detector.src.training_pipeline.db.db_source import get_db_engine
 import pandas as pd
 
 
@@ -45,7 +45,7 @@ def train_models(target_table: str,columns_to_ignore:list = None) -> None:
   os.makedirs(models_dir, exist_ok=True)
 
   translator_path = os.path.join(models_dir, f'{target_table}_translator.pkl')
-  model_path = os.path.join(models_dir, f'{target_table}_model.pkl')
+  model_path = os.path.join(models_dir, f'{target_table}_if_model.pkl')
 
   joblib.dump(translator, translator_path)
   joblib.dump(i_forest, model_path)
