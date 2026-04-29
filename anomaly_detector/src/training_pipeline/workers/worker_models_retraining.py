@@ -29,7 +29,11 @@ def retrain_models(target_table: str, columns_to_ignore: list = None) -> None:
         """
     df_history = pd.read_sql(query_internal, engine_internal)
     
-
+    if not df_history.empty:
+      df_history['original_id'] = df_history['original_id'].astype(df_source['id'].dtype)
+      
+      fraudes_ids = df_history[df_history['status'] == 'confirmed_fraud']['original_id']
+      falsos_pos_ids = df_history[df_history['status'] == 'false_positive']['original_id']
 
   except Exception as e:
     pass
