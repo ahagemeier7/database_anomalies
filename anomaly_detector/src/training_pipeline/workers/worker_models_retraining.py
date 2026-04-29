@@ -5,6 +5,8 @@ import pandas as pd
 from dotenv import load_dotenv
 from anomaly_detector.src.training_pipeline.db.db_internal import get_db_engine as get_db_engine_iternal
 from anomaly_detector.src.training_pipeline.db.db_source import get_db_engine as get_db_engine_source
+from sklearn.feature_extraction import DictVectorizer
+from sklearn.ensemble import IsolationForest, RandomForestClassifier
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -32,8 +34,45 @@ def retrain_models(target_table: str, columns_to_ignore: list = None) -> None:
     if not df_history.empty:
       df_history['original_id'] = df_history['original_id'].astype(df_source['id'].dtype)
       
-      fraudes_ids = df_history[df_history['status'] == 'confirmed_fraud']['original_id']
-      falsos_pos_ids = df_history[df_history['status'] == 'false_positive']['original_id']
+      frauds_ids = df_history[df_history['status'] == 'confirmed_fraud']['original_id']
+      false_pos_ids = df_history[df_history['status'] == 'false_positive']['original_id']
+
+      df_source.loc[df_source['id'].isin(frauds_ids), 'is_fraud'] = 1
+      df_source.loc[df_source['id'].isin(false_pos_ids), 'is_fraud'] = 0
+    else:
+      logging.info('No data verified found')
+
+    columns_to_drop = columns_to_ignore.copy() if columns_to_ignore else []
+    columns_to_drop.extend(['is_fraud', 'Class'])
+
+    df_features = df_source.drop(columns=columns_to_drop, errors='ignore')
+
+    df_features = df_features.apply(pd.to_numeric, errors='ignore')
+
+    # Converte Datas para String para não quebrar o DictVectorizer
+    for col in df_features.columns:
+        if pd.api.types.is_datetime64_any_dtype(df_features[col]):
+            df_features[col] = df_features[col].astype(str)
+
+    data_dict = df_features.to_dict(orient='records')
+
+    translator = DictVectorizer(sparse=False)
+
+    X = translator.fit_transform(data_dict)
+    y = df_source['is_fraud']
+
+    i_forest = IsolationForest(contamination=0.1,random_state=42)
+    i_forest.fit(X)
+
+    rf_trained = False
+
+    if 1 in y.values:
+      r_forest = RandomForestClassifier(n_estimators=100,random_state=42,n_jobs=-1)
+      r_forest.fit(X,y)
+
+      rf_trained = True
+    else:
+       logging.warning('No classified fraud found, skipping random forest')
 
   except Exception as e:
-    pass
+    logging.info('No data verified found')
