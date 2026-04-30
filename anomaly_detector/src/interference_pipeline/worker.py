@@ -117,8 +117,8 @@ class Worker:
       logging.info("Loading Unsupervised Model (Isolation Forest)...")
       # Assuming one preprocessor is enough if features are the same
       self.preprocessor = DynamicPreprocessor(
-          table_name=self.target_table,
-          columns_to_ignore=self.columns_to_ignore
+        table_name=self.target_table,
+        columns_to_ignore=self.columns_to_ignore
       )
       self.model_if = joblib.load(ISOLATIONFOREST_MODEL_PATH)
     except FileNotFoundError:
@@ -127,10 +127,10 @@ class Worker:
       
     try:
       if os.path.exists(RANDOMFOREST_MODEL_PATH):
-          logging.info("Loading Supervised Model (Random Forest)...")
-          self.model_rf = joblib.load(RANDOMFOREST_MODEL_PATH)
+        logging.info("Loading Supervised Model (Random Forest)...")
+        self.model_rf = joblib.load(RANDOMFOREST_MODEL_PATH)
       else:
-          logging.warning("Random Forest model not found. Running in Unsupervised-Only mode.")
+        logging.warning("Random Forest model not found. Running in Unsupervised-Only mode.")
     except Exception as e:
       logging.error(f"Failed to load Random Forest model, will proceed without it. Error: {e}")
       self.model_rf = None

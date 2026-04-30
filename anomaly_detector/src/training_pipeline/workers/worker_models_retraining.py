@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import joblib
 import pandas as pd
 from dotenv import load_dotenv
 from anomaly_detector.src.training_pipeline.db.db_internal import get_db_engine as get_db_engine_iternal
@@ -49,7 +50,7 @@ def retrain_models(target_table: str, columns_to_ignore: list = None) -> None:
 
     df_features = df_features.apply(pd.to_numeric, errors='ignore')
 
-    # Converte Datas para String para não quebrar o DictVectorizer
+    # Convert dates to string to work with dict vectorizer
     for col in df_features.columns:
         if pd.api.types.is_datetime64_any_dtype(df_features[col]):
             df_features[col] = df_features[col].astype(str)
@@ -72,7 +73,23 @@ def retrain_models(target_table: str, columns_to_ignore: list = None) -> None:
 
       rf_trained = True
     else:
-       logging.warning('No classified fraud found, skipping random forest')
+      logging.warning('No classified fraud found, skipping random forest')
+
+    models_dir = os.path.join(os.getcwd(), 'models')
+    os.makedirs(models_dir, exist_ok=True)
+
+    translator_path = os.path.join(models_dir, f'{target_table}_translator.pkl')
+    if_model_path = os.path.join(models_dir, f'{target_table}_if_model.pkl')
+    rf_model_path = os.path.join(models_dir, f'{target_table}_rf_model.pkl')
+
+    joblib.dump(translator, translator_path)
+    joblib.dump(i_forest, if_model_path)
+        
+    if rf_trained:
+      joblib.dump(r_forest, rf_model_path)
+    else:
+      logging.info(f"Isolation Forest saved in {models_dir}")
 
   except Exception as e:
-    logging.info('No data verified found')
+    logging.error(f"Critical error during model retrain {e}")
+    raise 
