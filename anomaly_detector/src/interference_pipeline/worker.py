@@ -83,7 +83,7 @@ class Worker:
       
   def _judge_prediction(self,score_if:float,prob_rf:float = None) -> bool:
     """This is the implementation of a hybrid ML model, that uses IsolationForest to discover new anomlies patterns,
-    and simultaneosly uses RandomForestClassifier to increse the prediction accuracy of known anomalies
+    and simultaneosly uses RandomForestClassifier to increase the prediction accuracy of known anomalies
 
     Args:
         score_if (float): Score predicted by IsolationForest
@@ -115,7 +115,6 @@ class Worker:
     # --- Load Isolation Forest (Mandatory) ---
     try:
       logging.info("Loading Unsupervised Model (Isolation Forest)...")
-      # Assuming one preprocessor is enough if features are the same
       self.preprocessor = DynamicPreprocessor(
         table_name=self.target_table,
         columns_to_ignore=self.columns_to_ignore
