@@ -125,3 +125,31 @@ services:
     depends_on:
       - kafka
       - postgres-internal
+
+#--===========Anomalies-web-hub===========--#
+  hub-backend:
+    build: 
+      context: ./anomalies_hub_backend
+    container_name: hub-backend
+    ports:
+      - "8000:8000"
+    restart: on-failure
+    environment:
+      #Source Database
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=db_real 
+      - POSTGRES_SERVER=postgres-source:5432 
+      
+      #Internal Database
+      - POSTGRES_USER_INTERNAL=admin_fraude
+      - POSTGRES_PASSWORD_INTERNAL=senha_segura
+      - POSTGRES_DB_INTERNAL=db_seguranca 
+      - POSTGRES_SERVER_INTERNAL=postgres-internal:5432
+    volumes:
+      
+      - ./anomaly_detector/src/models:/app/models
+      
+      - ./anomaly_detector/src/training_pipeline:/app/training_pipeline
+    depends_on:
+      - postgres-internal

@@ -1,12 +1,14 @@
 import os
+import joblib
 import logging
 from typing import List
-import joblib
+from datetime import datetime, timezone
+from sqlalchemy import text
+from ..training_pipeline.db.db_internal import get_db_engine
 from interference_pipeline.preprocessing_data.preprocess_data import DynamicPreprocessor
 from interference_pipeline.consumer.consumer import consumer_kafka_stream
 from interference_pipeline.producer.producer import AnomalyProducer
 from sklearn.ensemble import IsolationForest,RandomForestClassifier
-from datetime import datetime, timezone
 
 
 class Worker:
@@ -22,32 +24,47 @@ class Worker:
     self.preprocessor: DynamicPreprocessor = None
     self.model_if: IsolationForest = None
     self.model_rf: RandomForestClassifier = None
+    
+    self.last_model_version_time = 0
+    
+    self.ISOLATIONFOREST_MODEL_PATH = f"models/{self.target_table}_if_model.pkl"
+    self.RANDOMFOREST_MODEL_PATH = f"models/{self.target_table}_rf_model.pkl"
 
   def start_detection(self) -> None:
+    self._register_pipeline()
+    
     if not self._load_models():
       return
     KAFKA_TOPIC = f"source-postgres.public.{self.target_table}"
 
-    try:
-      logging.info(f"Worker started for the {self.target_table} pipeline.")
+    
+    logging.info(f"Worker started for the {self.target_table} pipeline.")
 
-      for event_json in consumer_kafka_stream(
-        topic=KAFKA_TOPIC,
-        group_id=self.group_id
-      ):
+    for event_json in consumer_kafka_stream(
+      topic=KAFKA_TOPIC,
+      group_id=self.group_id
+    ):
+      try:
+        if os.path.exists(self.RANDOMFOREST_MODEL_PATH):
+          current_file_time = os.path.getmtime(self.RANDOMFOREST_MODEL_PATH)
+            
+          if current_file_time > self.last_model_version_time:
+            logging.warning("New model detected, reloading...")
+            self._load_models()
+            logging.warning("Reload complete")
+          
         logging.info(f"Stream received from Kafka! Processing payload ID: {event_json.get('id', 'Unknown')}")
-
         features = self.preprocessor.transform_json_to_features(event_json)
-        
+          
         score_if = self.model_if.decision_function(features)[0]
-        
+          
         # Only get the probability if the RF model was loaded
         prob_rf = None
         if self.model_rf:
           prob_rf = self.model_rf.predict_proba(features)[0][1]
-        
+          
         is_anomaly = self._judge_prediction(score_if=score_if, prob_rf=prob_rf)
-        
+          
 
         if is_anomaly == True:
           logging.info("Anomaly detected, sending to kafka")
@@ -72,14 +89,14 @@ class Worker:
             "status": "pending_revision",
             "raw_event": event_json 
           }
-
+          
           self.anomaly_producer.send_anomaly(
             topic="detected_anomalies", 
             payload=payload_anomaly
           )
 
-    except Exception as e:
-      logging.error(f"An unexpected error occured while predicting the features: {e}")
+      except Exception as e:
+        logging.error(f"An unexpected error occured while predicting the features: {e}")
       
   def _judge_prediction(self,score_if:float,prob_rf:float = None) -> bool:
     """This is the implementation of a hybrid ML model, that uses IsolationForest to discover new anomlies patterns,
@@ -109,9 +126,6 @@ class Worker:
   def _load_models(self):
     """Loads all available models and preprocessor at startup."""
     
-    ISOLATIONFOREST_MODEL_PATH = f"models/{self.target_table}_if_model.pkl"
-    RANDOMFOREST_MODEL_PATH = f"models/{self.target_table}_rf_model.pkl"
-
     # --- Load Isolation Forest (Mandatory) ---
     try:
       logging.info("Loading Unsupervised Model (Isolation Forest)...")
@@ -119,19 +133,68 @@ class Worker:
         table_name=self.target_table,
         columns_to_ignore=self.columns_to_ignore
       )
-      self.model_if = joblib.load(ISOLATIONFOREST_MODEL_PATH)
+      self.model_if = joblib.load(self.ISOLATIONFOREST_MODEL_PATH)
     except FileNotFoundError:
-      logging.error(f"Isolation Forest model not found at {ISOLATIONFOREST_MODEL_PATH}. Worker cannot start.")
+      logging.error(f"Isolation Forest model not found at {self.ISOLATIONFOREST_MODEL_PATH}. Worker cannot start.")
       return False
       
     try:
-      if os.path.exists(RANDOMFOREST_MODEL_PATH):
+      if os.path.exists(self.RANDOMFOREST_MODEL_PATH):
         logging.info("Loading Supervised Model (Random Forest)...")
-        self.model_rf = joblib.load(RANDOMFOREST_MODEL_PATH)
+        self.model_rf = joblib.load(self.RANDOMFOREST_MODEL_PATH)
       else:
         logging.warning("Random Forest model not found. Running in Unsupervised-Only mode.")
     except Exception as e:
       logging.error(f"Failed to load Random Forest model, will proceed without it. Error: {e}")
       self.model_rf = None
-        
+      
+    if os.path.exists(self.RANDOMFOREST_MODEL_PATH):
+      self.last_model_version_time = os.path.getmtime(self.RANDOMFOREST_MODEL_PATH)
+
     return True
+        
+  def _register_pipeline(self):
+    """The worker creates a registration for itself, so the anomalies hub can check its data"""
+      
+    engine = get_db_engine()
+
+    create_table_query = text("""
+      CREATE TABLE IF NOT EXISTS pipelines_config (
+        target_table VARCHAR(100) PRIMARY KEY,
+        pipeline_name VARCHAR(100),
+        columns_to_ignore TEXT,
+        date_columns TEXT,
+        status VARCHAR(20) DEFAULT 'active',
+        last_startup TIMESTAMP
+      );
+    """)
+
+    cols_ignore_str = ",".join(self.columns_to_ignore) if self.columns_to_ignore else ""
+    dates_str = ",".join(self.date_columns) if self.date_columns else ""
+      
+    nome_bonito = f"Worker de {self.target_table.replace('_', ' ').title()}"
+
+    upsert_query = text("""
+      INSERT INTO pipelines_config (target_table, pipeline_name, columns_to_ignore, date_columns, last_startup)
+      VALUES (:target, :name, :cols, :dates, CURRENT_TIMESTAMP)
+      ON CONFLICT (target_table)
+      DO UPDATE SET 
+        columns_to_ignore = EXCLUDED.columns_to_ignore,
+        date_columns = EXCLUDED.date_columns,
+        last_startup = EXCLUDED.last_startup,
+        status = 'active';
+    """)
+
+    try:
+      with engine.connect() as conn:
+        conn.execute(create_table_query)
+        conn.execute(upsert_query, {
+          "target": self.target_table,
+          "name": nome_bonito,
+          "cols": cols_ignore_str,
+          "dates": dates_str
+        })
+        conn.commit()
+        logging.info(f"Pipeline {self.target_table} inserted in anomalies hub")
+    except Exception as e:
+      logging.error(f"Error registering the pipeline at anomalies Hub: {e}")
