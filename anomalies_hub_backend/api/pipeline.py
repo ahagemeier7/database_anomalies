@@ -22,19 +22,18 @@ def fetch_pipelines(db: Engine = Depends(get_db)):
   except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/pipelines/{target_table}/retrain", tags=["Machine Learning"], response_model=RetrainResponse)
 def trigger_retraining(target_table: str, bg_tasks: BackgroundTasks, db: Engine = Depends(get_db)):
   try:
     config = pipeline.get_pipeline_config(db, target_table)
     if not config:
-      raise HTTPException(status_code=404, detail="Pipeline não encontrado.")
+      raise HTTPException(status_code=404, detail="Pipeline not found.")
 
     cols_to_ignore = config['columns_to_ignore'].split(',') if config['columns_to_ignore'] else[]
         
     bg_tasks.add_task(retrain_hybrid_models, target_table, cols_to_ignore)
 
-    return {"message": f"Retreinamento iniciado para a tabela {target_table}."}
+    return {"message": f"Retrain started for the table: {target_table}."}
   except HTTPException:
     raise
   except Exception as e:

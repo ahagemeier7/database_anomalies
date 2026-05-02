@@ -25,6 +25,6 @@ def update_anomaly(alert_id: str, payload: StatusUpdatePayload, db: Engine = Dep
 
   try:
     anomalies.update_status(db, alert_id, payload.status)
-    return {"message": f"Alerta {alert_id} atualizado para '{payload.status}'!"}
+    return {"message": f"Alert {alert_id} updated to '{payload.status}'!"}
   except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))

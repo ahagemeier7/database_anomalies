@@ -70,11 +70,11 @@ class Worker:
           logging.info("Anomaly detected, sending to kafka")
 
           for col in self.date_columns:
-              date_value = event_json.get(col)
-              if date_value and isinstance(date_value, int):
-                  # Converting microseconds to date 
-                  dt = datetime.fromtimestamp(date_value / 1_000_000.0, tz=timezone.utc)
-                  event_json[col] = dt.strftime('%d/%m/%Y %H:%M:%S')
+            date_value = event_json.get(col)
+            if date_value and isinstance(date_value, int):
+              # Converting microseconds to date 
+              dt = datetime.fromtimestamp(date_value / 1_000_000.0, tz=timezone.utc)
+              event_json[col] = dt.strftime('%d/%m/%Y %H:%M:%S')
 
           model_used = "Hybrid (RF+IF)" if prob_rf is not None else "IsolationForest_v1"
 
