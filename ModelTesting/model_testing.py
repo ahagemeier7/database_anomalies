@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from sklearn.ensemble import IsolationForest,RandomForestClassifier
 from sklearn.metrics import confusion_matrix,classification_report
 from sklearn.model_selection import train_test_split
@@ -137,61 +138,46 @@ plt.xlabel('Fraud chance (Above .5 the model blocks)')
 plt.show()
 
 
+#---------------------
+#Hybrid model testing
+#---------------------
+#geting probabilities of being a anomaly
+scores_if = isolationForest.decision_function(X_test)
+probs_rf = model_rf.predict_proba(X_test)[:, 1]
+
+#Creating a Prediction array, filled with 0 (Normal)
+y_pred_hybrid = np.zeros(len(X_test), dtype=int)
+
+rule1 = probs_rf > 0.85
+
+rule2 = (probs_rf > 0.40) & (scores_if < -0.15)
+
+rule3 = scores_if < -0.10
+
+is_anomaly_mask = rule1 | rule2 | rule3
+y_pred_hybrid[is_anomaly_mask] = 1
+
+
+# ===================
+# Confusion matrix
+# ===================
+plt.figure(figsize=(8,6))
+cm_hybrid = confusion_matrix(y_test, y_pred_hybrid)
+
+sns.heatmap(cm_hybrid, 
+            annot=True, 
+            fmt='d', 
+            cmap='Purples',
+            xticklabels=['Normal Prediction', 'Fraud Prediction'],
+            yticklabels=['Real Normal', 'Real Fraud'])
+
+plt.title('Confusion Matrix - Hibrid model (IF + RF)')
+plt.ylabel('Real')
+plt.xlabel('Prediction')
+plt.show()
 
 
 #-------------------------------------------------------------
-
-# df = pd.concat([df[df['Class'] == 0].head(5000), df[df['Class'] == 1]])
-
-# X = df.drop(columns=['id', 'Time', 'Class'], errors='ignore')
-# y_true = df['Class']
-
-
-# X_train, X_test, y_train, y_test = train_test_split(X, y_true, test_size=0.3, random_state=42, stratify=y_true)
-
-# X_train_np = X_train.values
-# y_train_np = y_train.values
-# X_test_np = X_test.values
-# y_test_np = y_test.values
-
-
-# rf_scratch = RandomForest(n_trees=3, max_depth=5, min_samples_split=2)
-
-# rf_scratch.fit(X_train_np, y_train_np)
-
-# y_prediction = rf_scratch.predict(X_test_np)
-
-
-# print(classification_report(y_test_np, y_prediction, target_names=['Normal','Fraud']))
-
-# # ==============================================================
-# # Confusion matrix
-# # ==============================================================
-# plt.figure(figsize=(8,6))
-# cm = confusion_matrix(y_test_np, y_prediction)
-
-# sns.heatmap(cm, annot=True, fmt='d', cmap='Purples',
-#             xticklabels=['Prediction Normal','Prediction Fraud'],
-#             yticklabels=['Real Normal','Real Fraud'])
-
-# plt.title('Confusion matrix - Random forest (From Scratch)')
-# plt.ylabel('Real')
-# plt.xlabel('prediction')
-# plt.show()
-
-
-#----------------------------------------------------
-#Classification report - Isolation Forest
-#----------------------------------------------------
-#                 precision    recall  f1-score   support
-
-#       Normal       1.00      0.99      0.99     50000
-#        Fraud       0.31      0.63      0.41       492
-
-#     accuracy                           0.98     50492
-#    macro avg       0.65      0.81      0.70     50492
-# weighted avg       0.99      0.98      0.99     50492
-
 
 #Understanding the classification report
 
@@ -204,7 +190,7 @@ plt.show()
 
 #Column Precision
 # this is the odds that tells that each time that the model thougth something is an anomalie, wich one you were right (False positives)
-# On Isolation forest, it was right only 37% of the time
+# On Isolation forest, it was right only 31% of the time
 
 #Column f1-score
 #This is the average between recall and precision. Isolation forest only had 4.1 out of 10
