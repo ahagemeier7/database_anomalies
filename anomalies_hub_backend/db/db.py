@@ -29,7 +29,7 @@ def get_db_engine() -> Engine:
 
   missing_vars = [key for key, value in required_vars.items() if not value]
   if missing_vars:
-    logging.error(f"Couldn't connect to the databese, missing variables: {', '.join(missing_vars)}")
+    logging.error(f"Couldn't connect to the database, missing variables: {', '.join(missing_vars)}")
     sys.exit(1)
 
   try:
