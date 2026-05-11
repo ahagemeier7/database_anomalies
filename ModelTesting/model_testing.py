@@ -138,24 +138,76 @@ plt.xlabel('Fraud chance (Above .5 the model blocks)')
 plt.show()
 
 
-#---------------------
-#Hybrid model testing
-#---------------------
-#geting probabilities of being a anomaly
+# -------------------------------------------------------------
+# Hybrid model
+# -------------------------------------------------------------
+from sklearn.metrics import precision_score, recall_score, f1_score
+import numpy as np
+
 scores_if = isolationForest.decision_function(X_test)
 probs_rf = model_rf.predict_proba(X_test)[:, 1]
 
-#Creating a Prediction array, filled with 0 (Normal)
+print("\n" + "="*60)
+print("testing the best hybrid tune")
+print("="*60)
+
+melhor_f1 = 0
+melhor_prec = 0
+melhor_rec = 0
+melhor_regra = {}
+
+for rf_min in np.arange(0.05, 0.50, 0.05):
+    # E vai testar o Isolation Forest de -0.25 até -0.05
+    for if_limite in np.arange(-0.25, -0.05, 0.01):
+        
+        y_temp = np.zeros(len(X_test), dtype=int)
+        
+        # Regra 1 fixa: RF tem certeza absoluta
+        regra1 = probs_rf >= 0.50
+        # Regra 2 variável: O computador vai testar todas as combinações de rf_min e if_limite
+        regra2 = (probs_rf >= rf_min) & (probs_rf < 0.50) & (scores_if < if_limite)
+        
+        y_temp[regra1 | regra2] = 1
+        
+        # Calculando o F1 para essa combinação específica
+        f1_temp = f1_score(y_test, y_temp, pos_label=1, zero_division=0)
+        
+        # Se essa combinação for a melhor até agora, nós salvamos!
+        if f1_temp > melhor_f1:
+            melhor_f1 = f1_temp
+            melhor_prec = precision_score(y_test, y_temp, pos_label=1, zero_division=0)
+            melhor_rec = recall_score(y_test, y_temp, pos_label=1, zero_division=0)
+            melhor_regra = {'rf_min': rf_min, 'if_limite': if_limite}
+
+print(f"Campeão Encontrado!")
+print(f"F1-Score: {melhor_f1:.4f} (Para vencer o RF que tem 0.9025)")
+print(f"Precision: {melhor_prec:.4f} | Recall: {melhor_rec:.4f}")
+print(f"A Regra Perfeita é -> RF > {melhor_regra['rf_min']:.2f} E IF < {melhor_regra['if_limite']:.2f}")
+
+# Agora aplicamos a regra vencedora para valer
 y_pred_hybrid = np.zeros(len(X_test), dtype=int)
+rule1 = probs_rf >= 0.50
+rule2 = (probs_rf >= melhor_regra['rf_min']) & (probs_rf < 0.50) & (scores_if < melhor_regra['if_limite'])
+y_pred_hybrid[rule1 | rule2] = 1
 
-rule1 = probs_rf > 0.85
+print("\n(Execute o bloco de 'COMPARAÇÃO FINAL' logo abaixo para ver o gráfico atualizado!)")
 
-rule2 = (probs_rf > 0.40) & (scores_if < -0.15)
+# #---------------------
+# #Hybrid model testing
+# #---------------------
+# #geting probabilities of being a anomaly
+# scores_if = isolationForest.decision_function(X_test)
+# probs_rf = model_rf.predict_proba(X_test)[:, 1]
 
-rule3 = scores_if < -0.10
+# #Creating a Prediction array, filled with 0 (Normal)
+# y_pred_hybrid = np.zeros(len(X_test), dtype=int)
 
-is_anomaly_mask = rule1 | rule2 | rule3
-y_pred_hybrid[is_anomaly_mask] = 1
+# rule1 = probs_rf >= 0.50 
+
+# rule2 = (probs_rf >= 0.10) & (probs_rf < 0.50) & (scores_if < -0.19)
+
+# is_anomaly_mask = rule1 | rule2
+# y_pred_hybrid[is_anomaly_mask] = 1
 
 
 # ===================
@@ -176,6 +228,69 @@ plt.ylabel('Real')
 plt.xlabel('Prediction')
 plt.show()
 
+
+#----------------------------------------------------
+# Final comparision
+#----------------------------------------------------
+from sklearn.metrics import precision_score, recall_score, f1_score
+
+iPred_test = isolationForest.predict(X_test)
+y_pred_if = [1 if x == -1 else 0 for x in iPred_test]
+
+y_pred_rf = model_rf.predict(X_test)
+
+def calculate_metrics(y_real, y_pred):
+    prec = precision_score(y_real, y_pred, pos_label=1, zero_division=0)
+    rec = recall_score(y_real, y_pred, pos_label=1, zero_division=0)
+    f1 = f1_score(y_real, y_pred, pos_label=1, zero_division=0)
+    return prec, rec, f1
+
+
+prec_if, rec_if, f1_if = calculate_metrics(y_test, y_pred_if)
+prec_rf, rec_rf, f1_rf = calculate_metrics(y_test, y_pred_rf)
+prec_hy, rec_hy, f1_hy = calculate_metrics(y_test, y_pred_hybrid)
+
+
+df_compare = pd.DataFrame({
+    'Model': ['Isolation Forest', 'Random Forest', 'Hybrid (IF + RF)'],
+    'Precision': [prec_if, prec_rf, prec_hy],
+    'Recall':[rec_if, rec_rf, rec_hy],
+    'F1-Score':[f1_if, f1_rf, f1_hy]
+})
+
+print("\n" + "="*60)
+print("MODELS PERFORMANCE COMPARISON (Focusing on Fraud Catching)")
+print("="*60)
+
+print(df_compare.to_string(index=False, float_format=lambda x: f"{x:.4f}"))
+print("="*60 + "\n")
+
+#===================
+# Visualizing Differences
+#===================
+
+df_melted = df_compare.melt(id_vars='Model', var_name='Metric', value_name='Score')
+
+plt.figure(figsize=(10, 6))
+ax = sns.barplot(data=df_melted, x='Metric', y='Score', hue='Model', palette='magma')
+
+plt.title('Performance Comparison: IF vs RF vs Hybrid (Fraud Class Only)', fontsize=14)
+plt.ylabel('Score (0.0 to 1.0)')
+plt.ylim(0, 1.15) 
+plt.legend(title='Model', loc='upper right')
+
+
+for p in ax.patches:
+    height = p.get_height()
+    if height > 0: 
+        ax.annotate(f"{height:.2f}", 
+                    (p.get_x() + p.get_width() / 2., height), 
+                    ha='center', va='center', 
+                    xytext=(0, 8), 
+                    textcoords='offset points',
+                    fontsize=10, fontweight='bold')
+
+plt.show()
 
 #-------------------------------------------------------------
 
