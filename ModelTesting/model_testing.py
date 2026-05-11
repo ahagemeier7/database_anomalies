@@ -157,22 +157,21 @@ melhor_rec = 0
 melhor_regra = {}
 
 for rf_min in np.arange(0.05, 0.50, 0.05):
-    # E vai testar o Isolation Forest de -0.25 até -0.05
+  
     for if_limite in np.arange(-0.25, -0.05, 0.01):
         
         y_temp = np.zeros(len(X_test), dtype=int)
         
-        # Regra 1 fixa: RF tem certeza absoluta
+
         regra1 = probs_rf >= 0.50
-        # Regra 2 variável: O computador vai testar todas as combinações de rf_min e if_limite
+
         regra2 = (probs_rf >= rf_min) & (probs_rf < 0.50) & (scores_if < if_limite)
         
         y_temp[regra1 | regra2] = 1
         
-        # Calculando o F1 para essa combinação específica
+
         f1_temp = f1_score(y_test, y_temp, pos_label=1, zero_division=0)
         
-        # Se essa combinação for a melhor até agora, nós salvamos!
         if f1_temp > melhor_f1:
             melhor_f1 = f1_temp
             melhor_prec = precision_score(y_test, y_temp, pos_label=1, zero_division=0)
@@ -184,7 +183,7 @@ print(f"F1-Score: {melhor_f1:.4f} (Para vencer o RF que tem 0.9025)")
 print(f"Precision: {melhor_prec:.4f} | Recall: {melhor_rec:.4f}")
 print(f"A Regra Perfeita é -> RF > {melhor_regra['rf_min']:.2f} E IF < {melhor_regra['if_limite']:.2f}")
 
-# Agora aplicamos a regra vencedora para valer
+
 y_pred_hybrid = np.zeros(len(X_test), dtype=int)
 rule1 = probs_rf >= 0.50
 rule2 = (probs_rf >= melhor_regra['rf_min']) & (probs_rf < 0.50) & (scores_if < melhor_regra['if_limite'])
