@@ -151,45 +151,44 @@ print("\n" + "="*60)
 print("testing the best hybrid tune")
 print("="*60)
 
-melhor_f1 = 0
-melhor_prec = 0
-melhor_rec = 0
-melhor_regra = {}
+best_f1 = 0
+best_prec = 0
+best_rec = 0
+best_rule = {}
 
 for rf_min in np.arange(0.05, 0.50, 0.05):
   
-    for if_limite in np.arange(-0.25, -0.05, 0.01):
+    for if_limit in np.arange(-0.25, -0.05, 0.01):
         
         y_temp = np.zeros(len(X_test), dtype=int)
         
 
-        regra1 = probs_rf >= 0.50
+        rule1 = probs_rf >= 0.50
 
-        regra2 = (probs_rf >= rf_min) & (probs_rf < 0.50) & (scores_if < if_limite)
+        rule2 = (probs_rf >= rf_min) & (probs_rf < 0.50) & (scores_if < if_limit)
         
-        y_temp[regra1 | regra2] = 1
+        y_temp[rule1 | rule2] = 1
         
 
         f1_temp = f1_score(y_test, y_temp, pos_label=1, zero_division=0)
         
-        if f1_temp > melhor_f1:
-            melhor_f1 = f1_temp
-            melhor_prec = precision_score(y_test, y_temp, pos_label=1, zero_division=0)
-            melhor_rec = recall_score(y_test, y_temp, pos_label=1, zero_division=0)
-            melhor_regra = {'rf_min': rf_min, 'if_limite': if_limite}
+        if f1_temp > best_f1:
+            best_f1 = f1_temp
+            best_prec = precision_score(y_test, y_temp, pos_label=1, zero_division=0)
+            best_rec = recall_score(y_test, y_temp, pos_label=1, zero_division=0)
+            best_rule = {'rf_min': rf_min, 'if_limit': if_limit}
 
-print(f"Campeão Encontrado!")
-print(f"F1-Score: {melhor_f1:.4f} (Para vencer o RF que tem 0.9025)")
-print(f"Precision: {melhor_prec:.4f} | Recall: {melhor_rec:.4f}")
-print(f"A Regra Perfeita é -> RF > {melhor_regra['rf_min']:.2f} E IF < {melhor_regra['if_limite']:.2f}")
+print(f"F1-Score: {best_f1:.4f} (needs to beat: 0.9025)")
+print(f"Precision: {best_prec:.4f} | Recall: {best_rec:.4f}")
+print(f"The perfect rule is -> RF > {best_rule['rf_min']:.2f} and IF < {best_rule['if_limit']:.2f}")
 
 
 y_pred_hybrid = np.zeros(len(X_test), dtype=int)
 rule1 = probs_rf >= 0.50
-rule2 = (probs_rf >= melhor_regra['rf_min']) & (probs_rf < 0.50) & (scores_if < melhor_regra['if_limite'])
+rule2 = (probs_rf >= best_rule['rf_min']) & (probs_rf < 0.50) & (scores_if < best_rule['if_limit'])
 y_pred_hybrid[rule1 | rule2] = 1
 
-print("\n(Execute o bloco de 'COMPARAÇÃO FINAL' logo abaixo para ver o gráfico atualizado!)")
+
 
 # #---------------------
 # #Hybrid model testing
