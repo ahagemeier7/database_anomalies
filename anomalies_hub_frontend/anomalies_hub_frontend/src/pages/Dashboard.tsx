@@ -1,7 +1,7 @@
 // src/pages/WorkersPage.tsx
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import { fraudService } from '../services/services';
 import type { Pipeline } from '../types/types';
 
 export default function WorkersPage() {
@@ -9,15 +9,15 @@ export default function WorkersPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.get('/pipelines').then(response => {
-      setWorkers(response.data.pipelines);
-    }).catch(error => console.error("Erro ao buscar workers:", error));
+    fraudService.getPipelines()
+      .then(data => setWorkers(data))
+      .catch(err => console.error("Erro ao carregar workers:", err));
   },[]);
 
   const handleRetrain = async (tableName: string) => {
     try {
       alert(`Solicitando retreino para ${tableName}... Acompanhe o terminal do Backend!`);
-      await api.post(`/pipelines/${tableName}/retrain`);
+      await fraudService.retrainPipeline(tableName)
     } catch (error) {
       alert("Erro ao solicitar retreino.");
     }
