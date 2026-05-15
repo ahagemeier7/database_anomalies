@@ -3,7 +3,7 @@ import logging
 import joblib
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.ensemble import IsolationForest
-from anomaly_detector.src.training_pipeline.db.db_source import get_db_engine
+from src.training_pipeline.db.db_source import get_db_engine
 import pandas as pd
 
 

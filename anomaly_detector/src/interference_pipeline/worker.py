@@ -5,9 +5,9 @@ from typing import List
 from datetime import datetime, timezone
 from sqlalchemy import text
 from ..training_pipeline.db.db_internal import get_db_engine
-from interference_pipeline.preprocessing_data.preprocess_data import DynamicPreprocessor
-from interference_pipeline.consumer.consumer import consumer_kafka_stream
-from interference_pipeline.producer.producer import AnomalyProducer
+from .preprocessing_data.preprocess_data import DynamicPreprocessor
+from .consumer.consumer import consumer_kafka_stream
+from .producer.producer import AnomalyProducer
 from sklearn.ensemble import IsolationForest,RandomForestClassifier
 
 

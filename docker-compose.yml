@@ -153,3 +153,13 @@ services:
       - ./anomaly_detector/src/training_pipeline:/app/training_pipeline
     depends_on:
       - postgres-internal
+
+  hub-frontend:
+    build:
+      context: ./anomalies_hub_frontend/anomalies_hub_frontend
+    container_name: hub-frontend
+    ports:
+      - "3000:80"
+    restart: on-failure
+    depends_on:
+      - hub-backend

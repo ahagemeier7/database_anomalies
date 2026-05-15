@@ -4,7 +4,7 @@ import logging
 from email.message import EmailMessage
 from sqlalchemy import text
 from ..consumer.consumer import anomaly_consumer_kafka
-from db.db import get_db_engine
+from ..db.db import get_db_engine
 import json
 
 class AnomalyHandler:

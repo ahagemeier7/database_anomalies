@@ -4,8 +4,8 @@ import logging
 import joblib
 import pandas as pd
 from dotenv import load_dotenv
-from anomaly_detector.src.training_pipeline.db.db_internal import get_db_engine as get_db_engine_iternal
-from anomaly_detector.src.training_pipeline.db.db_source import get_db_engine as get_db_engine_source
+from src.training_pipeline.db.db_internal import get_db_engine as get_db_engine_iternal
+from src.training_pipeline.db.db_source import get_db_engine as get_db_engine_source
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
 
