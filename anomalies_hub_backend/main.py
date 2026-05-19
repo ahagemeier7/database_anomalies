@@ -3,7 +3,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from api.anomalies import router
+from api.anomalies import router as anomalies_router
+from api.pipeline import router as pipeline_router
+
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,8 +20,8 @@ app.add_middleware(
   allow_headers=["*"],
 )
 
-# Adiciona todas as rotas que estão no arquivo api/endpoints.py com o prefixo /api
-app.include_router(router, prefix="/api")
+app.include_router(anomalies_router, prefix="/api")
+app.include_router(pipeline_router, prefix="/api")
 
 if __name__ == "__main__":
     import uvicorn

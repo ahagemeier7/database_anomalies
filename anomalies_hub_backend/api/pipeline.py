@@ -6,9 +6,9 @@ from db.db import get_db_engine
 from schemas.schemas import RetrainResponse
 from crud import pipeline
 
-#Adding the /app sufix so that python finds the shared volume
+#Adding the /app suffix so that python finds the shared volume
 sys.path.append('/app')
-from training_pipeline.worker_models_retraining import retrain_hybrid_models
+from training_pipeline.workers.worker_models_retraining import retrain_hybrid_models
 
 router = APIRouter()
 

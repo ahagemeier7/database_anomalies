@@ -4,15 +4,15 @@ import logging
 import joblib
 import pandas as pd
 from dotenv import load_dotenv
-from src.training_pipeline.db.db_internal import get_db_engine as get_db_engine_iternal
-from src.training_pipeline.db.db_source import get_db_engine as get_db_engine_source
+from training_pipeline.db.db_internal import get_db_engine as get_db_engine_iternal
+from training_pipeline.db.db_source import get_db_engine as get_db_engine_source
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def retrain_models(target_table: str, columns_to_ignore: list = None) -> None:
+def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> None:
 
   engine_source = get_db_engine_source()
   engine_internal = get_db_engine_iternal()
