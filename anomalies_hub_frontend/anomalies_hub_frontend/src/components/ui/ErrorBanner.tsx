@@ -8,7 +8,7 @@ interface ErrorBannerProps {
 export function ErrorBanner({ message, onRetry }: ErrorBannerProps) {
   return (
     <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
-      <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
+      <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
       <p className="text-sm text-red-700 flex-1">{message}</p>
       {onRetry && (
         <button

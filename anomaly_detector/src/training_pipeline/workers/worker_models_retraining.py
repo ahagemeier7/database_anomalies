@@ -48,7 +48,8 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
 
     df_features = df_source.drop(columns=columns_to_drop, errors='ignore')
 
-    df_features = df_features.apply(pd.to_numeric, errors='ignore')
+    for col in df_features.columns:
+      df_features[col] = pd.to_numeric(df_features[col], errors='ignore')
 
     # Convert dates to string to work with dict vectorizer
     for col in df_features.columns:

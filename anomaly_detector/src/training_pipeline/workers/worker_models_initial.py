@@ -23,7 +23,8 @@ def train_models(target_table: str,columns_to_ignore:list = None) -> None:
   else:
     df_clean = df
 
-  df_clean = df_clean.apply(pd.to_numeric, errors='ignore')
+  for col in df_clean.columns:
+    df_clean[col] = pd.to_numeric(df_clean[col], errors='ignore')
 
   # Prevent Timestamp types from crashing DictVectorizer
   for col in df_clean.columns:
