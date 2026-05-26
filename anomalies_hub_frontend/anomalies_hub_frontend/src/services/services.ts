@@ -11,7 +11,7 @@ export const fraudService = {
   },
 
   // 2. Retreinar a IA
-  retrainPipeline: async (tableName: string): Promise<any> => {
+  retrainPipeline: async (tableName: string): Promise<{ message: string }> => {
     const response = await api.post(`/pipelines/${tableName}/retrain`);
     return response.data;
   },
@@ -24,7 +24,7 @@ export const fraudService = {
   },
 
   // 4. Atualizar Status (Julgamento do Humano)
-  updateAnomalyStatus: async (alertId: string, status: 'confirmed_fraud' | 'false_positive'): Promise<any> => {
+  updateAnomalyStatus: async (alertId: string, status: 'confirmed_fraud' | 'false_positive'): Promise<{ message: string }> => {
     const response = await api.put(`/anomalies/${alertId}/status`, { status });
     return response.data;
   }

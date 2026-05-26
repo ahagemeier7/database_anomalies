@@ -13,5 +13,5 @@ export interface Anomaly {
   origin_table: string;
   ml_model: string;
   status: 'pending_revision' | 'confirmed_fraud' | 'false_positive';
-  raw_event: any;
+  raw_event: Record<string, unknown>;
 }
