@@ -28,3 +28,11 @@ def update_anomaly(alert_id: str, payload: StatusUpdatePayload, db: Engine = Dep
     return {"message": f"Alert {alert_id} updated to '{payload.status}'!"}
   except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/anomalies/stats", tags=["Anomalies"])
+def fetch_dashboard_stats(db: Engine = Depends(get_db)):
+  """Return statistic data to the statistics page"""
+  try:
+    return anomalies.get_dashboard_stats(db)
+  except Exception as e:
+    raise HTTPException(status_code=500, detail=str(e))
