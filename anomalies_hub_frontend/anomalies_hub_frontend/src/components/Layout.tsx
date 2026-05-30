@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Shield, Layout as LayoutIcon, ClipboardList } from 'lucide-react';
+import { Shield, Layout as LayoutIcon, ClipboardList, BarChart3 } from 'lucide-react';
 
 export function Layout() {
   const linkClasses = ({ isActive }: { isActive: boolean }) =>
@@ -27,6 +27,10 @@ export function Layout() {
                 <NavLink to="/revisions" className={linkClasses}>
                   <ClipboardList className="h-4 w-4" />
                   Revisions
+                </NavLink>
+                <NavLink to="/stats" className={linkClasses}>
+                  <BarChart3 className="h-4 w-4" />
+                  Stats
                 </NavLink>
               </div>
             </div>

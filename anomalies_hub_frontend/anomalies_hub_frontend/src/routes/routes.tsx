@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import WorkersPage from '../pages/Dashboard';
 import RevisionsPage from '../pages/RevisionsPage';
+import StatsPage from '../pages/StatsPage';
 
 export default function AppRoutes() {
   return (
@@ -14,6 +15,7 @@ export default function AppRoutes() {
           
           <Route path="/revisions" element={<RevisionsPage />} />
           <Route path="/revisions/:tableName" element={<RevisionsPage />} />
+          <Route path="/stats" element={<StatsPage />} />
           
           {/* Rota 404 de fallback */}
           <Route path="*" element={<h2>Página não encontrada 🛑</h2>} />

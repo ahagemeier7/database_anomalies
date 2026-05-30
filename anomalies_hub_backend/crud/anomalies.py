@@ -1,23 +1,86 @@
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-def get_anomalies_by_status(engine: Engine, status: str, limit: int = 50):
+def get_anomalies_by_status(engine: Engine, status: str, limit: int = 50, offset: int = 0, origin_table: str | None = None):
   query = text("""
-    SELECT alert_id, timestamp_detection, origin_table, ml_model, status, raw_event 
-    FROM anomalies_history 
+    SELECT alert_id, timestamp_detection, origin_table, ml_model, status, raw_event
+    FROM anomalies_history
     WHERE status = :status
+    {table_filter}
     ORDER BY timestamp_detection DESC
-    LIMIT :limit
-  """)
+    LIMIT :limit OFFSET :offset
+  """.replace(
+    "{table_filter}",
+    "AND origin_table = :origin_table" if origin_table else ""
+  ))
+  params = {"status": status, "limit": limit, "offset": offset}
+  if origin_table:
+    params["origin_table"] = origin_table
   with engine.connect() as conn:
-    result = conn.execute(query, {"status": status, "limit": limit}).mappings().all()
+    result = conn.execute(query, params).mappings().all()
     return [dict(row) for row in result]
+
+
+def count_anomalies_by_status(engine: Engine, status: str, origin_table: str | None = None):
+  query = text("""
+    SELECT COUNT(*) as total
+    FROM anomalies_history
+    WHERE status = :status
+    {table_filter}
+  """.replace(
+    "{table_filter}",
+    "AND origin_table = :origin_table" if origin_table else ""
+  ))
+  params = {"status": status}
+  if origin_table:
+    params["origin_table"] = origin_table
+  with engine.connect() as conn:
+    return conn.execute(query, params).mappings().first()["total"]
+
 
 def update_status(engine: Engine, alert_id: str, status: str):
   query = text("UPDATE anomalies_history SET status = :status WHERE alert_id = :alert_id")
   with engine.connect() as conn:
     conn.execute(query, {"status": status, "alert_id": alert_id})
     conn.commit()
+
+
+def get_stats_by_table(engine: Engine):
+  """Return stats grouped by origin_table with precision per table."""
+
+  query = text("""
+    SELECT
+      origin_table,
+      COUNT(*) as total_alerts,
+      COUNT(CASE WHEN status = 'pending_revision' THEN 1 END) as pending_reviews,
+      COUNT(CASE WHEN status = 'confirmed_fraud' THEN 1 END) as confirmed_frauds,
+      COUNT(CASE WHEN status = 'false_positive' THEN 1 END) as false_positives
+    FROM anomalies_history
+    GROUP BY origin_table
+    ORDER BY total_alerts DESC
+  """)
+
+  with engine.connect() as conn:
+    rows = conn.execute(query).mappings().all()
+
+  results = []
+  for row in rows:
+    confirmed = row['confirmed_frauds'] or 0
+    false_pos = row['false_positives'] or 0
+    precision = 0.0
+    if (confirmed + false_pos) > 0:
+      precision = round(confirmed / (confirmed + false_pos) * 100, 1)
+
+    results.append({
+      "origin_table": row['origin_table'],
+      "total_alerts": row['total_alerts'],
+      "pending_reviews": row['pending_reviews'],
+      "confirmed_frauds": confirmed,
+      "false_positives": false_pos,
+      "precision": precision,
+    })
+
+  return results
 
 
 def get_dashboard_stats(engine: Engine):

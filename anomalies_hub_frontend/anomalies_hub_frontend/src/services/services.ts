@@ -1,6 +1,6 @@
 // src/services/fraudService.ts
 import api from './api';
-import type { Pipeline, Anomaly } from '../types/types';
+import type { Pipeline, Anomaly, DashboardStats, TableStats } from '../types/types';
 
 export const fraudService = {
   
@@ -16,16 +16,34 @@ export const fraudService = {
     return response.data;
   },
 
-  // 3. Buscar Anomalias (Opcional: filtrar por tabela)
-  getAnomalies: async (status: string = 'pending_revision'): Promise<Anomaly[]> => {
-    // Aqui a gente já poderia passar o target_table pro backend no futuro
-    const response = await api.get(`/anomalies?status=${status}`);
-    return response.data.anomalies;
+  // 3. Buscar Anomalias com paginação e filtro por tabela
+  getAnomalies: async (
+    status: string = 'pending_revision',
+    limit: number = 25,
+    offset: number = 0,
+    originTable?: string,
+  ): Promise<{ anomalies: Anomaly[]; total: number }> => {
+    const params = new URLSearchParams({ status, limit: String(limit), offset: String(offset) });
+    if (originTable) params.set('origin_table', originTable);
+    const response = await api.get(`/anomalies?${params}`);
+    return response.data;
   },
 
   // 4. Atualizar Status (Julgamento do Humano)
   updateAnomalyStatus: async (alertId: string, status: 'confirmed_fraud' | 'false_positive'): Promise<{ message: string }> => {
     const response = await api.put(`/anomalies/${alertId}/status`, { status });
+    return response.data;
+  },
+
+  // 5. Estatísticas do dashboard (global)
+  getStats: async (): Promise<DashboardStats> => {
+    const response = await api.get('/anomalies/stats');
+    return response.data;
+  },
+
+  // 6. Estatísticas por tabela
+  getStatsByTable: async (): Promise<TableStats[]> => {
+    const response = await api.get('/anomalies/stats/by-table');
     return response.data;
   }
 };
