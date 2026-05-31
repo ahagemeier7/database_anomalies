@@ -9,6 +9,8 @@ import pandas as pd
 
 def train_models(target_table: str,columns_to_ignore:list = None) -> None:
 
+  contamination = float(os.getenv("CONTAMINATION"))
+
   #fetching DB data
   try:
     engine = get_db_engine()
@@ -38,7 +40,7 @@ def train_models(target_table: str,columns_to_ignore:list = None) -> None:
   X_practice = translator.fit_transform(data_dict)
 
   #Instantianting the ML model
-  i_forest = IsolationForest(contamination=0.1,random_state=42)
+  i_forest = IsolationForest(contamination=contamination,random_state=42)
   i_forest.fit(X_practice)
 
   models_dir = os.path.join(os.getcwd(), 'models')

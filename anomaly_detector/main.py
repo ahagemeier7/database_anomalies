@@ -23,7 +23,7 @@ else:
     DATE_COLUMNS =[]
 
 TRANSLATOR_PATH = f'models/{TARGET_TABLE}_translator.pkl'
-MODEL_PATH = f'models/{TARGET_TABLE}_model.pkl'
+MODEL_PATH = f'models/{TARGET_TABLE}_if_model.pkl'
 
 
 if not os.path.exists(TRANSLATOR_PATH) or not os.path.exists(MODEL_PATH):

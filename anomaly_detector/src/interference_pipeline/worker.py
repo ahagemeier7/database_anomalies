@@ -29,6 +29,11 @@ class Worker:
     
     self.ISOLATIONFOREST_MODEL_PATH = f"models/{self.target_table}_if_model.pkl"
     self.RANDOMFOREST_MODEL_PATH = f"models/{self.target_table}_rf_model.pkl"
+    
+    self.RF_HIGH_CONFIDENCE_THRESHOLD = 0.85   # RF alone triggers the anomaly
+    self.RF_MODERATE_THRESHOLD = 0.4           # RF + IF combined
+    self.IF_COMBINED_THRESHOLD = -0.15         # IF to combined vote
+    self.IF_STANDALONE_THRESHOLD = -0.1        # IF triggers anomaly
 
   def start_detection(self) -> None:
     self._register_pipeline()
@@ -111,14 +116,14 @@ class Worker:
     """
     if prob_rf is not None:
       #If Random forest has more than 85% sure, the event is an anomaly
-      if prob_rf > 0.85:
+      if prob_rf > self.RF_HIGH_CONFIDENCE_THRESHOLD:
         return True
       
       #If Random forest was not so sure on the event, but Isolation forest thought it was a weird event,then is an anomaly
-      if prob_rf > 0.4 and score_if < -0.15:
+      if prob_rf > self.RF_MODERATE_THRESHOLD and score_if < self.IF_COMBINED_THRESHOLD: 
         return True
     
-    if score_if < -0.1:
+    if score_if < self.IF_STANDALONE_THRESHOLD:
       return True
       
     return False

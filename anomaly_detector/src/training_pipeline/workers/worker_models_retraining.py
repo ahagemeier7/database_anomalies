@@ -14,6 +14,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> None:
 
+  contamination = float(os.getenv("CONTAMINATION"))
+
   engine_source = get_db_engine_source()
   engine_internal = get_db_engine_iternal()
 
@@ -63,7 +65,7 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
     X = translator.fit_transform(data_dict)
     y = df_source['is_fraud']
 
-    i_forest = IsolationForest(contamination=0.1,random_state=42)
+    i_forest = IsolationForest(contamination=contamination,random_state=42)
     i_forest.fit(X)
 
     rf_trained = False

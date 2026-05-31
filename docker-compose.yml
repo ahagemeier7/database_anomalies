@@ -96,6 +96,15 @@ services:
       #Defining the columns that the Model should not see
       - COLUMNS_TO_IGNORE=id,Time,Class 
 
+      #Defining the tresholds, depending on the logic of the use
+      - RF_HIGH_CONFIDENCE_THRESHOLD = 0.85   # RF alone triggers the anomaly
+      - RF_MODERATE_THRESHOLD = 0.4           # RF + IF combined
+      - IF_COMBINED_THRESHOLD = -0.15         # IF to combined vote
+      - IF_STANDALONE_THRESHOLD = -0.1
+
+      #Defining the contamination of the ser
+      - CONTAMINATION = 0.01
+
       #If the table have date columns, you need to add the names separated with comma
       # - DATE_COLUMNS=
     volumes:
@@ -116,7 +125,6 @@ services:
       - SENDER_EMAIL=seu_email@gmail.com
       - EMAIL_PASSWORD=sua_senha_de_app
       - RECIEVER_EMAIL=equipe_fraude@empresa.com
-      - PRODUCTION=false
       - KAFKA_GROUP_ID=group_anomaly_handler
       - POSTGRES_USER=admin_fraude
       - POSTGRES_PASSWORD=senha_segura
