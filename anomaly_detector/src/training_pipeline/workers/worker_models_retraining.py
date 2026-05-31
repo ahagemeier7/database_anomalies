@@ -8,6 +8,8 @@ from training_pipeline.db.db_internal import get_db_engine as get_db_engine_iter
 from training_pipeline.db.db_source import get_db_engine as get_db_engine_source
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -70,13 +72,36 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
 
     rf_trained = False
 
-    if 1 in y.values:
-      r_forest = RandomForestClassifier(n_estimators=100,random_state=42,n_jobs=-1)
-      r_forest.fit(X,y)
+    if not df_history.empty and 1 in y.values:
+      labeled_ids = df_history['original_id'].unique()
+      labeled_mask = df_source['id'].isin(labeled_ids)
+      X_labeled = X[labeled_mask]
+      y_labeled = y[labeled_mask].values
 
-      rf_trained = True
+      if 1 in y_labeled:
+        # Split into train/test to evaluate model performance
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_labeled, y_labeled, test_size=0.2, stratify=y_labeled, random_state=42
+        )
+
+        r_forest = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+        r_forest.fit(X_train, y_train)
+
+        y_pred = r_forest.predict(X_test)
+        logging.info(
+            f"Random Forest validation (test set: {len(y_test)} samples):\n"
+            f"{classification_report(y_test, y_pred, zero_division=0)}"
+        )
+
+        # Retrain on the full labeled set for the final saved model
+        r_forest.fit(X_labeled, y_labeled)
+        rf_trained = True
+        logging.info(f"Random Forest final model trained on {len(y_labeled)} labeled rows "
+                     f"({(y_labeled == 1).sum()} frauds, {(y_labeled == 0).sum()} false positives)")
+      else:
+        logging.warning('No confirmed fraud in labeled data, skipping random forest')
     else:
-      logging.warning('No classified fraud found, skipping random forest')
+      logging.warning('No labeled data available, skipping random forest')
 
     models_dir = os.path.join(os.getcwd(), 'models')
     os.makedirs(models_dir, exist_ok=True)
