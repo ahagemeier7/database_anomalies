@@ -10,7 +10,7 @@ import pandas as pd
 
 def train_models(target_table: str,columns_to_ignore:list = None) -> None:
 
-  contamination = float(os.getenv("CONTAMINATION"))
+  contamination = float(os.getenv("CONTAMINATION", "0.01"))
 
   #fetching DB data
   try:

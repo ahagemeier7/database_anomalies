@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> None:
 
-  contamination = float(os.getenv("CONTAMINATION"))
+  contamination = float(os.getenv("CONTAMINATION", "0.01"))
 
   engine_source = get_db_engine_source()
   engine_internal = get_db_engine_iternal()

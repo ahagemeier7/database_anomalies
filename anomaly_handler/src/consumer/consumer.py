@@ -32,7 +32,7 @@ def anomaly_consumer_kafka(topic:str,group_id:str):
         if msg.error().code() in (KafkaError._PARTITION_EOF, KafkaError.UNKNOWN_TOPIC_OR_PART):
           continue 
         else:
-          print(f"Error: {msg.error()}")
+          logging.error(f"Kafka error: {msg.error()}")
           break
     
       valor_byte = msg.value()
