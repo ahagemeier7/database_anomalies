@@ -8,6 +8,7 @@ from training_pipeline.db.db_internal import get_db_engine as get_db_engine_iter
 from training_pipeline.db.db_source import get_db_engine as get_db_engine_source
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 
@@ -65,6 +66,13 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
     translator = DictVectorizer(sparse=False)
 
     X = translator.fit_transform(data_dict)
+
+    # Scale features — IsolationForest is sensitive to feature scale.
+    # StandardScaler ensures all numeric features contribute equally
+    # to the anomaly score, preventing large-range columns from dominating.
+    scaler = StandardScaler()
+    X = scaler.fit_transform(X)
+
     y = df_source['is_fraud']
 
     i_forest = IsolationForest(contamination=contamination,random_state=42)
@@ -109,9 +117,11 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
     translator_path = os.path.join(models_dir, f'{target_table}_translator.pkl')
     if_model_path = os.path.join(models_dir, f'{target_table}_if_model.pkl')
     rf_model_path = os.path.join(models_dir, f'{target_table}_rf_model.pkl')
+    scaler_path = os.path.join(models_dir, f'{target_table}_scaler.pkl')
 
     joblib.dump(translator, translator_path)
     joblib.dump(i_forest, if_model_path)
+    joblib.dump(scaler, scaler_path)
         
     if rf_trained:
       joblib.dump(r_forest, rf_model_path)

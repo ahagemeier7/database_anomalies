@@ -1,3 +1,4 @@
+import os
 import joblib
 from typing import Any,Dict,List
 from sklearn.feature_extraction import DictVectorizer
@@ -7,6 +8,14 @@ class DynamicPreprocessor:
   def __init__(self, table_name:str,columns_to_ignore: List[str]):
 
     self.translator: DictVectorizer = joblib.load(f"models/{table_name}_translator.pkl")
+
+    # Load scaler if available — models trained after the StandardScaler
+    # introduction will have it; legacy models work without it.
+    scaler_path = f"models/{table_name}_scaler.pkl"
+    if os.path.exists(scaler_path):
+      self.scaler = joblib.load(scaler_path)
+    else:
+      self.scaler = None
 
     self.columns_to_ignore = columns_to_ignore or []
 
@@ -26,5 +35,10 @@ class DynamicPreprocessor:
                 pass
 
     features = self.translator.transform([clean_json])
+
+    # Apply the same scaling used during training so features
+    # are on the same scale the model expects.
+    if self.scaler is not None:
+      features = self.scaler.transform(features)
 
     return features

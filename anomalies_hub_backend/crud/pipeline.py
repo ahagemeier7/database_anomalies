@@ -2,7 +2,18 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 def get_all_pipelines(engine: Engine):
-  query = text("SELECT * FROM pipelines_config ORDER BY last_startup DESC")
+  query = text("""
+    SELECT p.*,
+      COALESCE(a.pending, 0) as pending_count
+    FROM pipelines_config p
+    LEFT JOIN (
+      SELECT origin_table, COUNT(*) as pending
+      FROM anomalies_history
+      WHERE status = 'pending_revision'
+      GROUP BY origin_table
+    ) a ON a.origin_table = p.target_table
+    ORDER BY p.last_startup DESC
+  """)
   with engine.connect() as conn:
     result = conn.execute(query).mappings().all()
     return[dict(row) for row in result]
