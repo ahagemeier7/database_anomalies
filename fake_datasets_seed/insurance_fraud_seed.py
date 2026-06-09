@@ -9,7 +9,7 @@ engine = create_engine("postgresql://postgres:postgres@localhost:5432/db_real")
 diretorio_atual = os.path.dirname(os.path.abspath(__file__))
 
 #build the complete path
-caminho_csv = os.path.join(diretorio_atual, 'fraud_oracle.csv')
+caminho_csv = os.path.join(diretorio_atual, 'insurance_fraud.csv')
 
 df = pd.read_csv(caminho_csv)
 

@@ -68,17 +68,18 @@ services:
       - kafka-connect
 
 #--================Workers================--#
-  worker-transactions:
+  worker-insurance:
     build: 
       context: ./anomaly_detector
-    container_name: worker_transactions
+    container_name: worker_insurance
     restart: on-failure
     environment:
-      - GROUP_ID=group_worker_creditcard
+      - GROUP_ID=group_worker_insurance
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       
       #Changing the table name that the data will come
-      - TARGET_TABLE=credit_card_transactions
+      - TARGET_TABLE=insurance_claims
+      - COLUMNS_TO_IGNORE=id,FraudFound_P,PolicyNumber,RepNumber 
       
       #Database connection variables
       #Source Database
@@ -93,16 +94,13 @@ services:
       - POSTGRES_DB_INTERNAL=db_seguranca 
       - POSTGRES_SERVER_INTERNAL=postgres-internal:5432
 
-      #Defining the columns that the Model should not see
-      - COLUMNS_TO_IGNORE=id,Time,Class 
-
       #Defining the tresholds, depending on the logic of the use
       - RF_HIGH_CONFIDENCE_THRESHOLD = 0.85   # RF alone triggers the anomaly
       - RF_MODERATE_THRESHOLD = 0.4           # RF + IF combined
       - IF_COMBINED_THRESHOLD = -0.15         # IF to combined vote
       - IF_STANDALONE_THRESHOLD = -0.1
 
-      #Defining the contamination of the ser
+      #Defining the contamination of the set
       - CONTAMINATION = 0.01
 
       #If the table have date columns, you need to add the names separated with comma
