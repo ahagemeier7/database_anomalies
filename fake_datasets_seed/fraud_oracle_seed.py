@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from sqlalchemy import create_engine, text
 
-# https://www.kaggle.com/datasets/shivamb/insurance-claim-analysis-code
+# https://www.kaggle.com/datasets/shivamb/vehicle-claim-fraud-detection
 
 engine = create_engine("postgresql://postgres:postgres@localhost:5432/db_real")
 
