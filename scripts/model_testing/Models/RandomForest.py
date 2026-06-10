@@ -1,4 +1,4 @@
-from Models.DecisionTree import DecisionTree
+from scripts.model_testing.Models.DecisionTree import DecisionTree
 import numpy as np
 from collections import Counter
 

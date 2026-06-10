@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 #Implemented from scratch
-from Models.RandomForest import RandomForest
+from scripts.model_testing.Models.RandomForest import RandomForest
 
 df = pd.read_csv("ModelTesting/creditcard.csv")
 

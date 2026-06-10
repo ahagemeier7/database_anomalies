@@ -44,3 +44,25 @@ O projeto conta com 10 containers trabalhando em conjunto, sendo:
 - Inicie os containers: `docker-compose up` na raiz do projeto
 - Aguarde até que todos os serviços estejam prontos e acesse a aplicação pelo endereço configurado no frontend/hub-frontend
 - Para parar os serviços: `docker-compose down`
+
+## Estrutura do projeto
+- anomalies_hub_backend - Backend da aplicação web, feito com python e FastAPI
+- anomalies_hub_frontend - Frontend da aplicação. Feito com React + Vite
+- anomaly_detector - Analisa os eventos do kafka para detectar anomalias. Python + Scikit-Learn
+- anomaly_handler - Trata as anomalias, enviando elas para o banco interno e um aviso por email
+- docs - Contém o diagrama da arquitetura e a configuração base para o conector source do kafka
+- scripts
+  - model_testing - Validação das configurações dos modelos de ML, e testes de modelo híbrido
+  - startup_datasets_seed - Contém arquivos para o seed inicial com os dados do dataset
+
+## Fluxo dos dados
+Banco de dados origem (cdc) -> debezium -> Kafka -> anomaly detector   anomaly handler -> Banco de dados interno (Postgres) -> anomalies hub backend -> anomalies hub frontend
+                                            |   ^             |            ^
+                                            |   |             |            |
+                                            |   |             |            |
+                                            |   ---Anomalia----            |
+                                            |------------------------------|
+
+## Comandos úteis
+
+## Melhorias e sugestões

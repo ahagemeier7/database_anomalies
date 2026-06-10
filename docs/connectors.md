@@ -1,4 +1,6 @@
-source-postgres
+# Base source database connector 
+
+Connector name: source-postgres
 {
   "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
   "plugin.name": "pgoutput",
