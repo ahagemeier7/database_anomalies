@@ -37,13 +37,57 @@ O projeto conta com 10 containers trabalhando em conjunto, sendo:
     - Banco de dados interno PostgreSQL para armazenar os resultados e o status das anomalias
 
 ## Requisitos
-- Docker e Docker Compose para orquestrar os serviços de Kafka, PostgreSQL, Debezium e o aplicativo
-- O projeto roda totalmente em containers; não é necessário iniciar backend ou frontend localmente
 
-## Instalação e execução
-- Inicie os containers: `docker-compose up` na raiz do projeto
-- Aguarde até que todos os serviços estejam prontos e acesse a aplicação pelo endereço configurado no frontend/hub-frontend
-- Para parar os serviços: `docker-compose down`
+### Sistema
+- **Docker**: versão 20.10+ 
+- **Docker Compose**: versão 2.0+
+- **RAM**: mínimo 4GB disponível (recomendado 8GB)
+- **Espaço em disco**: mínimo 5GB
+
+### Versões dos componentes principais
+- Kafka: 7.4.0
+- PostgreSQL: 15-alpine
+- Zookeeper: 7.4.0 (integrado com Kafka)
+- Debezium: latest
+- Python dependencies: ver `requirements.txt` de cada módulo
+
+**Nota**: O projeto roda totalmente em containers; não é necessário iniciar backend ou frontend localmente se usar `docker-compose up`
+
+## Credenciais e Portas Padrão
+
+### Serviços Web
+| Serviço | URL | Descrição |
+|---------|-----|-----------|
+| Frontend | http://localhost:3000 | Aplicação web de detecção de anomalias |
+| Backend API | http://localhost:8000 | API FastAPI |
+| Kafka UI | http://localhost:8080 | Monitoramento de tópicos Kafka |
+| Kafka Connect | http://localhost:8083 | Gerenciamento de conectores Debezium |
+| Kafka | localhost:9092 | Broker Kafka |
+| Zookeeper | localhost:2181 | Orquestrador Kafka |
+
+### Email (Anomaly Handler)
+**⚠️ Configurar antes de usar o handler:**
+- `SENDER_EMAIL`: seu_email@gmail.com (seu Gmail)
+- `EMAIL_PASSWORD`: sua_senha_de_app (senha de app do Gmail)
+- `RECIEVER_EMAIL`: equipe_fraude@empresa.com (destinatário)
+
+## Instalação e Execução
+
+### Opção 1: Com Docker Compose (Recomendado)
+```bash
+# Clonar o repositório
+git clone <seu-repositorio>
+cd database_anomalies
+
+# Iniciar todos os serviços
+docker-compose up
+
+# Em outro terminal, para ver logs
+docker-compose logs -f
+
+# Parar os serviços
+docker-compose down
+```
 
 ## Estrutura do projeto
 - anomalies_hub_backend - Backend da aplicação web, feito com python e FastAPI
@@ -56,12 +100,7 @@ O projeto conta com 10 containers trabalhando em conjunto, sendo:
   - startup_datasets_seed - Contém arquivos para o seed inicial com os dados do dataset
 
 ## Fluxo dos dados
-Banco de dados origem (cdc) -> debezium -> Kafka -> anomaly detector   anomaly handler -> Banco de dados interno (Postgres) -> anomalies hub backend -> anomalies hub frontend
-                                            |   ^             |            ^
-                                            |   |             |            |
-                                            |   |             |            |
-                                            |   ---Anomalia----            |
-                                            |------------------------------|
+Banco de dados origem (cdc) -> debezium -> Kafka -> anomaly detector -> kafka -> anomaly handler -> Banco de dados interno (Postgres) -> anomalies hub backend -> anomalies hub frontend
 
 ## Comandos úteis
 
