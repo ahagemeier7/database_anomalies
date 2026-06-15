@@ -65,4 +65,5 @@ Banco de dados origem (cdc) -> debezium -> Kafka -> anomaly detector   anomaly h
 
 ## Comandos úteis
 
+
 ## Melhorias e sugestões
