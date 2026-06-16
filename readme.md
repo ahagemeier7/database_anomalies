@@ -104,5 +104,101 @@ Banco de dados origem (cdc) -> debezium -> Kafka -> anomaly detector -> kafka ->
 
 ## Comandos úteis
 
+### Docker
+```bash
+# Ver logs de um serviço específico
+docker-compose logs -f hub-backend
+docker-compose logs -f worker-insurance
+
+# Listar containers e status
+docker-compose ps
+
+# Reiniciar um serviço
+docker-compose restart hub-backend
+
+# Parar todos os serviços e remover volumes (limpeza total)
+docker-compose down -v
+
+# Rebuildar uma imagem após mudanças
+docker-compose build hub-backend
+```
+
+### Desenvolvimento
+```bash
+# Subir tudo em foreground (com logs)
+docker-compose up
+
+# Subir tudo em background
+docker-compose up -d
+
+# Subir apenas serviços específicos
+docker-compose up hub-backend hub-frontend
+
+# Rebuildar e subir (após alterações de código)
+docker-compose up --build
+```
+
+## API Reference
+
+A documentação interativa da API (Swagger UI) está disponível em:
+- **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+### Endpoints
+
+#### Anomalias
+
+| Método | Path | Descrição |
+|--------|------|-----------|
+| `GET` | `/api/anomalies` | Lista anomalias paginadas. Query params: `status` (default: `pending_revision`), `limit`, `offset`, `origin_table` |
+| `PUT` | `/api/anomalies/{alert_id}/status` | Atualiza o status de um alerta. Body: `{ "status": "confirmed_fraud" \| "false_positive" \| "pending_revision" }` |
+| `GET` | `/api/anomalies/stats` | Retorna contagens agregadas e gráfico de histórico (7 dias) para o dashboard |
+| `GET` | `/api/anomalies/stats/by-table` | Retorna estatísticas agrupadas por tabela de origem, com precisão por tabela |
+
+#### Pipelines
+
+| Método | Path | Descrição |
+|--------|------|-----------|
+| `GET` | `/api/pipelines` | Lista todas as pipelines de ML configuradas, com contagem de pendentes |
+| `POST` | `/api/pipelines/{target_table}/retrain` | Dispara retreinamento assíncrono dos modelos para a tabela alvo |
+
+## Troubleshooting
+
+### Porta 3000 já está em uso
+```bash
+# Linux/macOS
+lsof -i :3000
+
+# Windows
+netstat -ano | findstr :3000
+```
+Encerre o processo que está usando a porta ou altere a porta no `docker-compose.yml`.
+
+### Modelo não treina
+- Verifique permissões da pasta `anomaly_detector/src/models` — precisa ser gravável
+- Confira se os dados de seed estão disponíveis: `docker-compose logs seed-insurance`
+- Se a tabela não existir no source-DB, a pipeline não encontrará dados para treinar
+
+### Kafka não conecta
+```bash
+# Verificar logs do Kafka
+docker-compose logs kafka
+
+# Verificar se o Zookeeper está saudável
+docker-compose logs zookeeper
+```
+Aguarde ~30 segundos após `docker-compose up` para o Kafka inicializar completamente.
+
+### Erro de conexão no backend
+- Confirme que o banco interno está rodando: `docker-compose logs postgres-internal`
+- Verifique as variáveis de ambiente no `docker-compose.yml` (seção `hub-backend`)
+- O backend depende do `postgres-internal` — certifique-se de que ele está healthy
 
 ## Melhorias e sugestões
+- [ ] Cobertura de testes (pytest)
+- [ ] CI/CD com GitHub Actions
+- [ ] Logs estruturados em JSON
+- [ ] Health checks nos containers
+- [ ] Otimização multi-stage dos Dockerfiles
+
+Sugestões são bem-vindas! Abra uma issue ou envie um PR.

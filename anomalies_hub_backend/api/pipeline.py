@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from sqlalchemy.engine import Engine
 
 from db.db import get_db_engine
-from schemas.schemas import RetrainResponse
+from schemas.schemas import RetrainResponse, PipelineListResponse
 from crud import pipeline
 
 #Adding the /app suffix so that python finds the shared volume
@@ -15,14 +15,29 @@ router = APIRouter()
 def get_db():
   return get_db_engine()
 
-@router.get("/pipelines", tags=["Config"])
+@router.get(
+    "/pipelines",
+    tags=["Config"],
+    response_model=PipelineListResponse,
+    summary="Listar pipelines de ML",
+    description="Retorna todas as pipelines de detecção configuradas, "
+                "incluindo a contagem de anomalias pendentes por tabela.",
+)
 def fetch_pipelines(db: Engine = Depends(get_db)):
   try:
     return {"pipelines": pipeline.get_all_pipelines(db)}
   except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/pipelines/{target_table}/retrain", tags=["Machine Learning"], response_model=RetrainResponse)
+@router.post(
+    "/pipelines/{target_table}/retrain",
+    tags=["Machine Learning"],
+    response_model=RetrainResponse,
+    summary="Disparar retreinamento de modelo",
+    description="Inicia o retreinamento assíncrono dos modelos híbridos "
+                "(Isolation Forest + Random Forest) para a tabela alvo informada. "
+                "A tarefa é executada em background.",
+)
 def trigger_retraining(target_table: str, bg_tasks: BackgroundTasks, db: Engine = Depends(get_db)):
   try:
     config = pipeline.get_pipeline_config(db, target_table)
@@ -30,7 +45,7 @@ def trigger_retraining(target_table: str, bg_tasks: BackgroundTasks, db: Engine 
       raise HTTPException(status_code=404, detail="Pipeline not found.")
 
     cols_to_ignore = config['columns_to_ignore'].split(',') if config['columns_to_ignore'] else[]
-        
+
     bg_tasks.add_task(retrain_hybrid_models, target_table, cols_to_ignore)
 
     return {"message": f"Retrain started for the table: {target_table}."}
