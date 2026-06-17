@@ -5,6 +5,7 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 from src.training_pipeline.db.db_source import get_db_engine
+from src.training_pipeline.workers.model_versioning import save_versioned_models
 import pandas as pd
 
 
@@ -51,13 +52,10 @@ def train_models(target_table: str,columns_to_ignore:list = None) -> None:
   i_forest.fit(X_scaled)
 
   models_dir = os.path.join(os.getcwd(), 'models')
-
-  os.makedirs(models_dir, exist_ok=True)
-
-  translator_path = os.path.join(models_dir, f'{target_table}_translator.pkl')
-  model_path = os.path.join(models_dir, f'{target_table}_if_model.pkl')
-  scaler_path = os.path.join(models_dir, f'{target_table}_scaler.pkl')
-
-  joblib.dump(translator, translator_path)
-  joblib.dump(i_forest, model_path)
-  joblib.dump(scaler, scaler_path)
+  save_versioned_models(
+      target_table=target_table,
+      models_dir=models_dir,
+      translator=translator,
+      isolation_forest=i_forest,
+      scaler=scaler,
+  )

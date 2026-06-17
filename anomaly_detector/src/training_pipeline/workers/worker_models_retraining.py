@@ -6,6 +6,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from training_pipeline.db.db_internal import get_db_engine as get_db_engine_iternal
 from training_pipeline.db.db_source import get_db_engine as get_db_engine_source
+from training_pipeline.workers.model_versioning import save_versioned_models
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
@@ -112,21 +113,14 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
       logging.warning('No labeled data available, skipping random forest')
 
     models_dir = os.path.join(os.getcwd(), 'models')
-    os.makedirs(models_dir, exist_ok=True)
-
-    translator_path = os.path.join(models_dir, f'{target_table}_translator.pkl')
-    if_model_path = os.path.join(models_dir, f'{target_table}_if_model.pkl')
-    rf_model_path = os.path.join(models_dir, f'{target_table}_rf_model.pkl')
-    scaler_path = os.path.join(models_dir, f'{target_table}_scaler.pkl')
-
-    joblib.dump(translator, translator_path)
-    joblib.dump(i_forest, if_model_path)
-    joblib.dump(scaler, scaler_path)
-        
-    if rf_trained:
-      joblib.dump(r_forest, rf_model_path)
-    else:
-      logging.info(f"Isolation Forest saved in {models_dir}")
+    save_versioned_models(
+        target_table=target_table,
+        models_dir=models_dir,
+        translator=translator,
+        isolation_forest=i_forest,
+        scaler=scaler,
+        rf_model=r_forest if rf_trained else None,
+    )
 
   except Exception as e:
     logging.error(f"Critical error during model retrain {e}")
