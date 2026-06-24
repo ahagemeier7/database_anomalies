@@ -21,6 +21,8 @@ POST /api/pipelines/{target_table}/versions/{version}/activate # ativa versão
 
 4. Adicionar Pydantic schemas em `anomalies_hub_backend/schemas/schemas.py` para `ModelVersion` e respostas.
 5. Estender `anomaly_detector/src/training_pipeline/workers/model_versioning.py` para retornar metadados e inserir um registro em `model_versions` (paths, métricas, created_at) após salvar os artefatos.
+--Feito--
+
 6. Atualizar `retrain_hybrid_models` e `train_models` para coletar métricas básicas (ex.: número de amostras, precision/recall quando disponível) e passá-las para a rotina de persistência de versão.
 7. Atualizar `anomaly_detector/src/interference_pipeline/worker.py` e `anomaly_detector/src/interference_pipeline/preprocessing_data/preprocess_data.py` para suportar carregar modelos por `version` e/ou consultar a versão ativa via DB/API.
 8. Frontend (`anomalies_hub_frontend`):

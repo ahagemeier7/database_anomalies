@@ -6,12 +6,15 @@ import pandas as pd
 from dotenv import load_dotenv
 from training_pipeline.db.db_internal import get_db_engine as get_db_engine_iternal
 from training_pipeline.db.db_source import get_db_engine as get_db_engine_source
-from training_pipeline.workers.model_versioning import save_versioned_models
+from training_pipeline.workers.model_versioning import (
+    save_versioned_models,
+    insert_model_version_record,
+)
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, precision_score, recall_score, f1_score
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -80,6 +83,7 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
     i_forest.fit(X)
 
     rf_trained = False
+    r_forest = None
 
     if not df_history.empty and 1 in y.values:
       labeled_ids = df_history['original_id'].unique()
@@ -113,13 +117,38 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
       logging.warning('No labeled data available, skipping random forest')
 
     models_dir = os.path.join(os.getcwd(), 'models')
-    save_versioned_models(
+    model_metadata = save_versioned_models(
         target_table=target_table,
         models_dir=models_dir,
         translator=translator,
         isolation_forest=i_forest,
         scaler=scaler,
         rf_model=r_forest if rf_trained else None,
+    )
+
+    metrics = {
+      "samples": int(len(df_source)),
+      "feature_count": int(df_features.shape[1]),
+      "rf_model_trained": rf_trained,
+      "labeled_data": int(len(df_history)) if not df_history.empty else 0,
+      "fraud_count": int((y == 1).sum()),
+    }
+
+    if rf_trained:
+      metrics.update({
+        "training_samples": int(len(y_labeled)),
+        "precision": float(precision_score(y_test, y_pred, zero_division=0)),
+        "recall": float(recall_score(y_test, y_pred, zero_division=0)),
+        "f1_score": float(f1_score(y_test, y_pred, zero_division=0)),
+      })
+
+    insert_model_version_record(
+      engine_internal,
+      target_table,
+      model_metadata["version"],
+      model_metadata["paths"],
+      metrics=metrics,
+      is_active=False,
     )
 
   except Exception as e:

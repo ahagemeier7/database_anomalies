@@ -77,5 +77,26 @@ class PipelineListResponse(BaseModel):
     pipelines: list[PipelineItem]
 
 
+class ModelVersionItem(BaseModel):
+    target_table: str
+    version: str
+    translator_path: str
+    if_model_path: str
+    scaler_path: str
+    rf_model_path: str | None = None
+    metrics: dict[str, Any] | None = None
+    is_active: bool = False
+    created_at: datetime
+
+
+class ModelVersionListResponse(BaseModel):
+    versions: list[ModelVersionItem]
+
+
+class ActivationResponse(BaseModel):
+    message: str
+    active_version: str
+
+
 class RetrainResponse(BaseModel):
     message: str

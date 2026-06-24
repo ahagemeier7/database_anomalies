@@ -3,7 +3,13 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from sqlalchemy.engine import Engine
 
 from db.db import get_db_engine
-from schemas.schemas import RetrainResponse, PipelineListResponse
+from schemas.schemas import (
+    RetrainResponse,
+    PipelineListResponse,
+    ModelVersionListResponse,
+    ModelVersionItem,
+    ActivationResponse,
+)
 from crud import pipeline
 
 #Adding the /app suffix so that python finds the shared volume
@@ -51,5 +57,58 @@ def trigger_retraining(target_table: str, bg_tasks: BackgroundTasks, db: Engine 
     return {"message": f"Retrain started for the table: {target_table}."}
   except HTTPException:
     raise
+  except Exception as e:
+    raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/pipelines/{target_table}/versions",
+    tags=["Machine Learning"],
+    response_model=ModelVersionListResponse,
+    summary="Listar versões de modelo",
+    description="Retorna todas as versões de modelo disponíveis para a pipeline alvo.",
+)
+def list_model_versions(target_table: str, db: Engine = Depends(get_db)):
+  try:
+    return {"versions": pipeline.get_model_versions(db, target_table)}
+  except Exception as e:
+    raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/pipelines/{target_table}/versions/active",
+    tags=["Machine Learning"],
+    response_model=ModelVersionItem,
+    summary="Versão ativa do modelo",
+    description="Retorna a versão atualmente ativa do modelo para a pipeline alvo.",
+)
+def get_active_model_version(target_table: str, db: Engine = Depends(get_db)):
+  try:
+    active = pipeline.get_active_model_version(db, target_table)
+    if not active:
+      raise HTTPException(status_code=404, detail="Active model version not found.")
+    return active
+  except HTTPException:
+    raise
+  except Exception as e:
+    raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/pipelines/{target_table}/versions/{version}/activate",
+    tags=["Machine Learning"],
+    response_model=ActivationResponse,
+    summary="Ativar versão de modelo",
+    description="Ativa a versão de modelo especificada e marca-a como ativa na pipeline.",
+)
+def activate_model_version(target_table: str, version: str, db: Engine = Depends(get_db)):
+  try:
+    pipeline.activate_model_version(db, target_table, version)
+    return {
+      "message": f"Model version {version} activated for {target_table}.",
+      "active_version": version,
+    }
+  except ValueError as ve:
+    raise HTTPException(status_code=404, detail=str(ve))
   except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))
