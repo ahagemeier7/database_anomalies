@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Database, Eye, RotateCw } from 'lucide-react';
+import { Database, Eye, Layers, RotateCw } from 'lucide-react';
 import { fraudService } from '../services/services';
 import type { Pipeline } from '../types/types';
 import { Button, Card, StatusBadge, PageHeader, SkeletonCard, ErrorBanner, useToast } from '../components/ui';
@@ -81,6 +81,14 @@ export default function WorkersPage() {
                   onClick={() => navigate(`/revisions/${worker.target_table}`)}
                 >
                   Reviews
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Layers className="h-4 w-4" />}
+                  onClick={() => navigate(`/versions/${worker.target_table}`)}
+                >
+                  Versions
                 </Button>
                 <Button
                   variant="primary"

@@ -1,18 +1,19 @@
 import os
 import joblib
-from typing import Any,Dict,List
+from typing import Any,Dict,List,Optional
 from sklearn.feature_extraction import DictVectorizer
 
 class DynamicPreprocessor:
 
-  def __init__(self, table_name:str,columns_to_ignore: List[str]):
+  def __init__(self, table_name:str, columns_to_ignore: List[str], translator_path: Optional[str] = None, scaler_path: Optional[str] = None):
 
-    self.translator: DictVectorizer = joblib.load(f"models/{table_name}_translator.pkl")
+    translator_path = translator_path or f"models/{table_name}_translator.pkl"
+    self.translator: DictVectorizer = joblib.load(translator_path)
 
     # Load scaler if available — models trained after the StandardScaler
     # introduction will have it; legacy models work without it.
-    scaler_path = f"models/{table_name}_scaler.pkl"
-    if os.path.exists(scaler_path):
+    scaler_path = scaler_path or f"models/{table_name}_scaler.pkl"
+    if scaler_path and os.path.exists(scaler_path):
       self.scaler = joblib.load(scaler_path)
     else:
       self.scaler = None

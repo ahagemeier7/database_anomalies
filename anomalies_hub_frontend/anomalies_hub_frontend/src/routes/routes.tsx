@@ -4,6 +4,7 @@ import { Layout } from '../components/Layout';
 import WorkersPage from '../pages/WorkersPage';
 import RevisionsPage from '../pages/RevisionsPage';
 import StatsPage from '../pages/StatsPage';
+import ModelVersionsPage from '../pages/ModelVersionsPage';
 import { EmptyState } from '../components/ui';
 
 export default function AppRoutes() {
@@ -17,6 +18,7 @@ export default function AppRoutes() {
 
           <Route path="/revisions" element={<RevisionsPage />} />
           <Route path="/revisions/:tableName" element={<RevisionsPage />} />
+          <Route path="/versions/:tableName" element={<ModelVersionsPage />} />
           <Route path="/stats" element={<StatsPage />} />
 
           {/* Rota 404 de fallback */}

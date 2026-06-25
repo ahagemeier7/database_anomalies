@@ -158,3 +158,23 @@ def insert_model_version_record(
             "is_active": is_active,
         })
         conn.commit()
+
+
+def get_model_version(engine: Engine, target_table: str, version: str):
+    ensure_model_versions_schema(engine)
+    query = text(
+        "SELECT target_table, version, translator_path, if_model_path, scaler_path, rf_model_path, metrics, is_active, created_at "
+        "FROM model_versions WHERE target_table = :target_table AND version = :version LIMIT 1"
+    )
+    with engine.connect() as conn:
+        return conn.execute(query, {"target_table": target_table, "version": version}).mappings().first()
+
+
+def get_active_model_version(engine: Engine, target_table: str):
+    ensure_model_versions_schema(engine)
+    query = text(
+        "SELECT target_table, version, translator_path, if_model_path, scaler_path, rf_model_path, metrics, is_active, created_at "
+        "FROM model_versions WHERE target_table = :target_table AND is_active = true LIMIT 1"
+    )
+    with engine.connect() as conn:
+        return conn.execute(query, {"target_table": target_table}).mappings().first()

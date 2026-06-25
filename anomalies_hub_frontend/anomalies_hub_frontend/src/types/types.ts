@@ -39,3 +39,15 @@ export interface TableStats {
   false_positives: number;
   precision: number;
 }
+
+export interface ModelVersion {
+  target_table: string;
+  version: string;
+  translator_path: string;
+  if_model_path: string;
+  scaler_path: string;
+  rf_model_path?: string;
+  metrics?: Record<string, unknown>;
+  is_active: boolean;
+  created_at: string;
+}

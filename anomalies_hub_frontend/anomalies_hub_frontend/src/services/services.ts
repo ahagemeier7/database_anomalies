@@ -1,6 +1,6 @@
 // src/services/fraudService.ts
 import api from './api';
-import type { Pipeline, Anomaly, DashboardStats, TableStats } from '../types/types';
+import type { Pipeline, Anomaly, DashboardStats, TableStats, ModelVersion } from '../types/types';
 
 export const fraudService = {
   
@@ -45,5 +45,17 @@ export const fraudService = {
   getStatsByTable: async (): Promise<TableStats[]> => {
     const response = await api.get('/anomalies/stats/by-table');
     return response.data;
-  }
+  },
+
+  // 7. Modelo: listar versões
+  getModelVersions: async (tableName: string): Promise<ModelVersion[]> => {
+    const response = await api.get(`/pipelines/${tableName}/versions`);
+    return response.data.versions;
+  },
+
+  // 8. Modelo: ativar versão
+  activateModelVersion: async (tableName: string, version: string): Promise<{ message: string; active_version: string }> => {
+    const response = await api.post(`/pipelines/${tableName}/versions/${version}/activate`);
+    return response.data;
+  },
 };

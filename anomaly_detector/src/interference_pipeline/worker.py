@@ -1,10 +1,11 @@
 import os
 import joblib
 import logging
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timezone
 from sqlalchemy import text
 from ..training_pipeline.db.db_internal import get_db_engine
+from ..training_pipeline.workers.model_versioning import get_active_model_version, get_model_version
 from .preprocessing_data.preprocess_data import DynamicPreprocessor
 from .consumer.consumer import consumer_kafka_stream
 from .producer.producer import AnomalyProducer
@@ -13,23 +14,26 @@ from sklearn.ensemble import IsolationForest,RandomForestClassifier
 
 class Worker:
 
-  def __init__(self,target_table:str,group_id:str,columns_to_ignore: List[str],date_columns:List[str] = None):
+  def __init__(self,target_table:str,group_id:str,columns_to_ignore: List[str],date_columns:List[str] = None, model_version: Optional[str] = None):
     self.target_table = target_table
-
     self.group_id = group_id
-    self.columns_to_ignore = columns_to_ignore or ['id'] 
+    self.columns_to_ignore = columns_to_ignore or ['id']
     self.date_columns = date_columns or []
+    self.model_version = model_version
     self.anomaly_producer = AnomalyProducer()
-    
+
     self.preprocessor: DynamicPreprocessor = None
     self.model_if: IsolationForest = None
     self.model_rf: RandomForestClassifier = None
-    
+
     self.last_model_version_time = 0
-    
+
     self.ISOLATIONFOREST_MODEL_PATH = f"models/{self.target_table}_if_model.pkl"
     self.RANDOMFOREST_MODEL_PATH = f"models/{self.target_table}_rf_model.pkl"
-    
+    self.TRANSLATOR_PATH = f"models/{self.target_table}_translator.pkl"
+    self.SCALER_PATH = f"models/{self.target_table}_scaler.pkl"
+    self.USE_VERSIONED_MODEL = False
+
     self.RF_HIGH_CONFIDENCE_THRESHOLD = 0.85   # RF alone triggers the anomaly
     self.RF_MODERATE_THRESHOLD = 0.4           # RF + IF combined
     self.IF_COMBINED_THRESHOLD = -0.15         # IF to combined vote
@@ -130,22 +134,55 @@ class Worker:
   
   def _load_models(self):
     """Loads all available models and preprocessor at startup."""
-    
+
+    engine = get_db_engine()
+    version_record = None
+
+    if self.model_version:
+      logging.info(f"Looking for explicit model version '%s' in the internal DB...", self.model_version)
+      version_record = get_model_version(engine, self.target_table, self.model_version)
+
+    if not version_record:
+      logging.info("Looking for the active model version in the internal DB...")
+      version_record = get_active_model_version(engine, self.target_table)
+
+    if version_record:
+      logging.info(
+          "Found versioned model record for table '%s': %s",
+          self.target_table,
+          version_record["version"],
+      )
+      self.USE_VERSIONED_MODEL = True
+      self.TRANSLATOR_PATH = version_record["translator_path"]
+      self.ISOLATIONFOREST_MODEL_PATH = version_record["if_model_path"]
+      self.SCALER_PATH = version_record["scaler_path"]
+      self.RANDOMFOREST_MODEL_PATH = version_record.get("rf_model_path") or ""
+    else:
+      logging.warning(
+          "No versioned model record found for '%s'. Falling back to legacy model paths.",
+          self.target_table,
+      )
+
     # --- Load Isolation Forest (Mandatory) ---
     try:
-      logging.info("Loading Unsupervised Model (Isolation Forest)...")
+      logging.info("Loading Unsupervised Model (Isolation Forest) from %s...", self.ISOLATIONFOREST_MODEL_PATH)
       self.preprocessor = DynamicPreprocessor(
         table_name=self.target_table,
-        columns_to_ignore=self.columns_to_ignore
+        columns_to_ignore=self.columns_to_ignore,
+        translator_path=self.TRANSLATOR_PATH,
+        scaler_path=self.SCALER_PATH,
       )
       self.model_if = joblib.load(self.ISOLATIONFOREST_MODEL_PATH)
     except FileNotFoundError:
       logging.error(f"Isolation Forest model not found at {self.ISOLATIONFOREST_MODEL_PATH}. Worker cannot start.")
       return False
+    except Exception as e:
+      logging.error(f"Failed to load Isolation Forest model: {e}")
+      return False
       
     try:
-      if os.path.exists(self.RANDOMFOREST_MODEL_PATH):
-        logging.info("Loading Supervised Model (Random Forest)...")
+      if self.RANDOMFOREST_MODEL_PATH and os.path.exists(self.RANDOMFOREST_MODEL_PATH):
+        logging.info("Loading Supervised Model (Random Forest) from %s...", self.RANDOMFOREST_MODEL_PATH)
         self.model_rf = joblib.load(self.RANDOMFOREST_MODEL_PATH)
       else:
         logging.warning("Random Forest model not found. Running in Unsupervised-Only mode.")
@@ -153,8 +190,8 @@ class Worker:
       logging.error(f"Failed to load Random Forest model, will proceed without it. Error: {e}")
       self.model_rf = None
       
-    if os.path.exists(self.RANDOMFOREST_MODEL_PATH):
-      self.last_model_version_time = os.path.getmtime(self.RANDOMFOREST_MODEL_PATH)
+    if os.path.exists(self.ISOLATIONFOREST_MODEL_PATH):
+      self.last_model_version_time = os.path.getmtime(self.ISOLATIONFOREST_MODEL_PATH)
 
     return True
         
