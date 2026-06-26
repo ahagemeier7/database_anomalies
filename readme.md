@@ -73,21 +73,47 @@ O projeto conta com 10 containers trabalhando em conjunto, sendo:
 
 ## Instalação e Execução
 
+### Configuração do ambiente
+1. Copie o arquivo de exemplo:
+   ```bash
+   cp .env.example .env
+   ```
+2. Preencha as variáveis em `.env`.
+3. Não versionar o arquivo `.env`.
+
 ### Opção 1: Com Docker Compose (Recomendado)
 ```bash
 # Clonar o repositório
 git clone <seu-repositorio>
 cd database_anomalies
 
+# Copiar o template de ambiente
+cp .env.example .env
+
 # Iniciar todos os serviços
-docker-compose up
+docker compose up --build
 
 # Em outro terminal, para ver logs
-docker-compose logs -f
+docker compose logs -f
 
 # Parar os serviços
-docker-compose down
+docker compose down
 ```
+
+### Opção 2: Com seed de dados
+```bash
+# Copiar o template de ambiente
+cp .env.example .env
+
+# Iniciar os serviços e o seed de dados
+docker compose --profile seed up --build
+```
+
+### Como verificar se tudo subiu
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8000`
+- Kafka UI: `http://localhost:8080`
+- Kafka Connect: `http://localhost:8083`
 
 ## Estrutura do projeto
 - anomalies_hub_backend - Backend da aplicação web, feito com python e FastAPI
