@@ -6,13 +6,13 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.feature_extraction import DictVectorizer
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
 from sklearn.metrics import confusion_matrix, classification_report, precision_score, recall_score, f1_score
 from sklearn.model_selection import train_test_split
 
-DATASET_RELATIVE_PATH = os.path.join('scripts', 'startup_datasets_seed', 'insurance_fraud.csv')
+# 1. Altere o caminho para onde salvou o seu dataset de cartão de crédito
+DATASET_RELATIVE_PATH = 'C:\\Users\\augusto.hagemeier\\Documents\\almoço\\database_anomalies\\scripts\\startup_datasets_seed\\creditcard_small.csv'
 
 if __name__ == '__main__':
     csv_path = os.path.abspath(DATASET_RELATIVE_PATH)
@@ -20,7 +20,9 @@ if __name__ == '__main__':
         raise FileNotFoundError(f"Dataset not found: {csv_path}")
 
     df = pd.read_csv(csv_path)
-    target_col = 'FraudFound_P'
+    
+    # No dataset de cartão de crédito, o alvo chama-se 'Class' (0 = normal, 1 = fraude)
+    target_col = 'Class'
 
     if target_col not in df.columns:
         raise ValueError(f"Expected target column '{target_col}' not found in dataset")
@@ -31,18 +33,12 @@ if __name__ == '__main__':
     print(f"Normal rows: {(df[target_col] == 0).sum()}")
     print(f"Fraud ratio: {df[target_col].mean():.4f}\n")
 
-    # Remove columns that are identifiers or not meaningful for modeling
-    drop_cols = [target_col, 'PolicyNumber', 'RepNumber']
+    # A coluna 'Time' indica apenas os segundos decorridos e não agrega valor preditivo
+    drop_cols = [target_col, 'Time']
     X_raw = df.drop(columns=drop_cols, errors='ignore')
     y = df[target_col].astype(int)
 
-    for col in X_raw.columns:
-        if X_raw[col].dtype == object:
-            coerced = pd.to_numeric(X_raw[col], errors='coerce')
-            if coerced.notna().all():
-                X_raw[col] = coerced
-
-    # 1. DIVIDIR PRIMEIRO (Evita completamente o vazamento de dados no escalonamento)
+    # 2. DIVISÃO EM TREINO, VALIDAÇÃO E TESTE (Evita vazamento de dados)
     X_train_full, X_test, y_train_full, y_test = train_test_split(
         X_raw, y, test_size=0.2, stratify=y, random_state=42
     )
@@ -50,34 +46,23 @@ if __name__ == '__main__':
         X_train_full, y_train_full, test_size=0.25, stratify=y_train_full, random_state=42
     )
 
-    # 2. VETORIZAR (fit apenas no treino, transform nos outros)
-    vectorizer = DictVectorizer(sparse=False)
-    X_train_dict = X_train.to_dict(orient='records')
-    X_train_vec = vectorizer.fit_transform(X_train_dict)
-    
-    X_val_dict = X_val.to_dict(orient='records')
-    X_val_vec = vectorizer.transform(X_val_dict)
-    
-    X_test_dict = X_test.to_dict(orient='records')
-    X_test_vec = vectorizer.transform(X_test_dict)
-
-    # 3. ESCALONAR (fit apenas no treino, transform nos outros)
+    # 3. ESCALONAR (Não precisamos de DictVectorizer porque os dados já são 100% numéricos)
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train_vec)
-    X_val_scaled = scaler.transform(X_val_vec)
-    X_test_scaled = scaler.transform(X_test_vec)
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_val_scaled = scaler.transform(X_val)
+    X_test_scaled = scaler.transform(X_test)
 
     # ---------------------
     # Isolation Forest
     # ---------------------
     contamination_rate = max(0.01, y_train.mean())
-    isolation_forest = IsolationForest(contamination=contamination_rate, random_state=42)
+    isolation_forest = IsolationForest(contamination=contamination_rate, random_state=42,n_estimators=200)
     isolation_forest.fit(X_train_scaled)
 
     # ---------------------
     # Random Forest supervised model
     # ---------------------
-    model_rf = RandomForestClassifier(n_estimators=150, random_state=42, n_jobs=-1, class_weight='balanced')
+    model_rf = RandomForestClassifier(n_estimators=150, random_state=42, n_jobs=-1, class_weight='balanced', max_depth=12, min_samples_leaf=2)
     model_rf.fit(X_train_scaled, y_train)
 
     # Obter previsões para Validação e Teste
@@ -107,7 +92,7 @@ if __name__ == '__main__':
     # ---------------------
     best_f1 = -1.0
     best_config = None
-    rf_high_candidates = np.linspace(0.4, max(0.7, y_rf_proba_val.max()), 7)
+    rf_high_candidates = np.linspace(0.4, max(0.7, y_rf_proba_val.max()), 12)
     rf_mod_candidates = np.linspace(0.1, 0.4, 7)
     if_comb_candidates = np.linspace(scores_if_val.min(), min(-0.001, scores_if_val.max()), 7)
     if_stand_candidates = np.linspace(scores_if_val.min(), min(-0.001, scores_if_val.max()), 7)
@@ -200,7 +185,7 @@ if __name__ == '__main__':
     })
 
     print('\n' + '=' * 70)
-    print('Performance comparison on insurance claims dataset (Test Set):')
+    print('Performance comparison on credit card dataset (Test Set):')
     print(df_compare.to_string(index=False, float_format=lambda x: f'{x:.4f}'))
     print('=' * 70)
     sys.stdout.flush()
