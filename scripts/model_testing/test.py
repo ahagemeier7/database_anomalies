@@ -56,3 +56,40 @@ if __name__ == '__main__':
     #Aqui só o transform para o modelo utilizar somente o que ele já aprender com o fit transform da linha de cima e não deixar vazar dados
     X_val_scaled = scaler.transform(X_val)
     X_test_scaled = scaler.transform(X_test)
+
+    ##Isolation Forest
+    contamination_rate = max(0.01,y_train.mean())
+    
+    isolation_forest = IsolationForest(
+        contamination=contamination_rate,
+        random_state=42,
+        n_estimatores=200           #Constroi 200 arvores de isolamento para melhorar o resultado
+    )
+
+    isolation_forest.fit(X_train_scaled)
+
+    ##Random Forest
+    model_rf = RandomForestClassifier(
+        n_estimators=150,           # número de arvores na floresta, no final o modelo faz uma votação entre 150 arvores para dar a resposta
+        random_state=42,            
+        n_jobs=-1,                  # instrui a utilizar todos os nucleos disponiveis de forma paralela
+        class_weight='balanced',    # esse parametro serve para o desbalanceamento, com 97% das transações normais e 3% fraudes. 
+                                    # Esse parametro faz com que o modelo evite ignorar fraudes para manter acuracia
+
+        max_depth=12,               # Garante que a profundidade seja de no máximo 12 niveis, evita que a arvore decore o treino
+        min_samples_leaf=2          # Mínimo de amostras na folha, para garantir que ele aprenda regras robustas
+    )
+
+    model_rf.fit(X_train_scaled,y_train)
+
+
+    #Pegando as probabilidades para os modelos híbridos
+    #Aqui pega as previsões para a validação e os testes
+    y_rf_proba_val = model_rf.predict_proba(X_val_scaled)[:,1]
+    y_rf_proba_test = model_rf.predict_proba(X_test_scaled)[:,1]
+
+    #Pega os scores do IF para a validação e teste
+    scores_if_val = isolation_forest.decision_function(X_val_scaled)
+    scores_if_test = isolation_forest.decision_function(X_test_scaled)
+
+
