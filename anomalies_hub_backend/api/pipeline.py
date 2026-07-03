@@ -6,6 +6,9 @@ from db.db import get_db_engine
 from schemas.schemas import (
     RetrainResponse,
     PipelineListResponse,
+    PipelineConfigResponse,
+    InferenceModeUpdatePayload,
+    InferenceModeUpdateResponse,
     ModelVersionListResponse,
     ModelVersionItem,
     ActivationResponse,
@@ -34,6 +37,48 @@ def fetch_pipelines(db: Engine = Depends(get_db)):
     return {"pipelines": pipeline.get_all_pipelines(db)}
   except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))
+
+@router.get(
+    "/pipelines/{target_table}",
+    tags=["Config"],
+    response_model=PipelineConfigResponse,
+    summary="Obter configuração da pipeline",
+    description="Retorna a configuração atual da pipeline, incluindo o modo de inferência selecionado.",
+)
+def get_pipeline_configuration(target_table: str, db: Engine = Depends(get_db)):
+  try:
+    config = pipeline.get_pipeline_config(db, target_table)
+    if not config:
+      raise HTTPException(status_code=404, detail="Pipeline not found.")
+    return {
+      "target_table": target_table,
+      "inference_mode": config.get("inference_mode") or "hybrid",
+    }
+  except HTTPException:
+    raise
+  except Exception as e:
+    raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/pipelines/{target_table}/inference-mode",
+    tags=["Config"],
+    response_model=InferenceModeUpdateResponse,
+    summary="Atualizar modo de inferência",
+    description="Persiste o modo de inferência selecionado para a pipeline alvo.",
+)
+def update_inference_mode(target_table: str, payload: InferenceModeUpdatePayload, db: Engine = Depends(get_db)):
+  try:
+    pipeline.update_pipeline_inference_mode(db, target_table, payload.inference_mode)
+    return {
+      "message": f"Inference mode updated for {target_table}.",
+      "inference_mode": payload.inference_mode,
+    }
+  except ValueError as ve:
+    raise HTTPException(status_code=400, detail=str(ve))
+  except Exception as e:
+    raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post(
     "/pipelines/{target_table}/retrain",

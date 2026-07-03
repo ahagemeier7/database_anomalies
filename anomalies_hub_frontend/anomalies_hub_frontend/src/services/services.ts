@@ -16,6 +16,16 @@ export const fraudService = {
     return response.data;
   },
 
+  getPipelineConfig: async (tableName: string): Promise<{ target_table: string; inference_mode: string | null }> => {
+    const response = await api.get(`/pipelines/${tableName}`);
+    return response.data;
+  },
+
+  updatePipelineInferenceMode: async (tableName: string, inferenceMode: string): Promise<{ message: string; inference_mode: string }> => {
+    const response = await api.post(`/pipelines/${tableName}/inference-mode`, { inference_mode: inferenceMode });
+    return response.data;
+  },
+
   // 3. Buscar Anomalias com paginação e filtro por tabela
   getAnomalies: async (
     status: string = 'pending_revision',

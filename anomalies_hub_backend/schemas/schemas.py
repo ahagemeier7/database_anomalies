@@ -77,6 +77,20 @@ class PipelineListResponse(BaseModel):
     pipelines: list[PipelineItem]
 
 
+class PipelineConfigResponse(BaseModel):
+    target_table: str
+    inference_mode: str | None = None
+
+
+class InferenceModeUpdatePayload(BaseModel):
+    inference_mode: str = Field(..., description="Modo de inferência desejado: if, rf ou hybrid")
+
+
+class InferenceModeUpdateResponse(BaseModel):
+    message: str
+    inference_mode: str
+
+
 class ModelVersionItem(BaseModel):
     target_table: str
     version: str

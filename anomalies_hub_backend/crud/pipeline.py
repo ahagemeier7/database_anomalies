@@ -21,7 +21,8 @@ def ensure_model_versions_schema(engine: Engine):
 
   alter_table_query = text("""
     ALTER TABLE pipelines_config
-    ADD COLUMN IF NOT EXISTS active_model_version VARCHAR(50);
+    ADD COLUMN IF NOT EXISTS active_model_version VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS inference_mode VARCHAR(50) DEFAULT 'hybrid';
   """)
 
   with engine.connect() as conn:
@@ -32,7 +33,13 @@ def ensure_model_versions_schema(engine: Engine):
 
 def get_all_pipelines(engine: Engine):
   query = text("""
-    SELECT p.*,
+    SELECT p.target_table,
+      p.pipeline_name,
+      p.columns_to_ignore,
+      p.date_columns,
+      p.inference_mode,
+      p.status,
+      p.last_startup,
       COALESCE(a.pending, 0) as pending_count
     FROM pipelines_config p
     LEFT JOIN (
@@ -48,9 +55,27 @@ def get_all_pipelines(engine: Engine):
     return [dict(row) for row in result]
 
 def get_pipeline_config(engine: Engine, target_table: str):
-  query = text("SELECT columns_to_ignore FROM pipelines_config WHERE target_table = :target_table")
+  query = text("SELECT columns_to_ignore, inference_mode FROM pipelines_config WHERE target_table = :target_table")
   with engine.connect() as conn:
     return conn.execute(query, {"target_table": target_table}).mappings().first()
+
+
+def update_pipeline_inference_mode(engine: Engine, target_table: str, inference_mode: str):
+  ensure_model_versions_schema(engine)
+  normalized_mode = str(inference_mode or '').strip().lower()
+  if normalized_mode not in {'if', 'rf', 'hybrid'}:
+    raise ValueError("inference_mode must be one of: if, rf, hybrid")
+
+  with engine.begin() as conn:
+    conn.execute(
+      text("""
+        INSERT INTO pipelines_config (target_table, inference_mode)
+        VALUES (:target_table, :inference_mode)
+        ON CONFLICT (target_table)
+        DO UPDATE SET inference_mode = EXCLUDED.inference_mode
+      """),
+      {"target_table": target_table, "inference_mode": normalized_mode}
+    )
 
 
 def insert_model_version(engine: Engine, target_table: str, version: str, paths: dict, metrics: dict | None = None, is_active: bool = False):

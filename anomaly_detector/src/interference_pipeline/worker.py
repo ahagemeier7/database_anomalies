@@ -14,12 +14,13 @@ from sklearn.ensemble import IsolationForest,RandomForestClassifier
 
 class Worker:
 
-  def __init__(self,target_table:str,group_id:str,columns_to_ignore: List[str],date_columns:List[str] = None, model_version: Optional[str] = None):
+  def __init__(self,target_table:str,group_id:str,columns_to_ignore: List[str],date_columns:List[str] = None, model_version: Optional[str] = None, inference_mode: Optional[str] = None):
     self.target_table = target_table
     self.group_id = group_id
     self.columns_to_ignore = columns_to_ignore or ['id']
     self.date_columns = date_columns or []
     self.model_version = model_version
+    self.inference_mode = self._normalize_inference_mode(inference_mode)
     self.anomaly_producer = AnomalyProducer()
 
     self.preprocessor: DynamicPreprocessor = None
@@ -27,6 +28,7 @@ class Worker:
     self.model_rf: RandomForestClassifier = None
 
     self.last_model_version_time = 0
+    self.last_inference_mode = self.inference_mode
 
     self.ISOLATIONFOREST_MODEL_PATH = f"models/{self.target_table}_if_model.pkl"
     self.RANDOMFOREST_MODEL_PATH = f"models/{self.target_table}_rf_model.pkl"
@@ -38,6 +40,46 @@ class Worker:
     self.RF_MODERATE_THRESHOLD = 0.4           # RF + IF combined
     self.IF_COMBINED_THRESHOLD = -0.15         # IF to combined vote
     self.IF_STANDALONE_THRESHOLD = -0.1        # IF triggers anomaly
+
+  def _normalize_inference_mode(self, inference_mode: Optional[str]) -> str:
+    if inference_mode is None:
+      return "hybrid"
+
+    normalized = str(inference_mode).strip().lower()
+
+    if normalized in {"if", "isolation_forest", "isolationforest"}:
+      return "if"
+    if normalized in {"rf", "random_forest", "randomforest"}:
+      return "rf"
+    if normalized in {"hybrid", "hybrid_model"}:
+      return "hybrid"
+
+    logging.warning("Unsupported inference mode '%s'. Falling back to 'hybrid'.", inference_mode)
+    return "hybrid"
+
+  def _sync_inference_mode_from_db(self, reload_models: bool = False) -> None:
+    try:
+      engine = get_db_engine()
+      with engine.connect() as conn:
+        row = conn.execute(
+          text("""
+            SELECT inference_mode
+            FROM pipelines_config
+            WHERE target_table = :target_table
+          """),
+          {"target_table": self.target_table},
+        ).mappings().first()
+
+      if row and row.get("inference_mode"):
+        normalized_mode = self._normalize_inference_mode(row["inference_mode"])
+        if normalized_mode != self.inference_mode:
+          self.inference_mode = normalized_mode
+          logging.info("Inference mode updated from DB to '%s'.", self.inference_mode)
+          if reload_models and self.preprocessor is not None:
+            logging.info("Reloading models because inference mode changed.")
+            self._load_models()
+    except Exception as exc:
+      logging.warning("Could not sync inference mode from DB: %s", exc)
 
   def start_detection(self) -> None:
     self._register_pipeline()
@@ -54,6 +96,8 @@ class Worker:
       group_id=self.group_id
     ):
       try:
+        self._sync_inference_mode_from_db(reload_models=True)
+
         if os.path.exists(self.RANDOMFOREST_MODEL_PATH):
           current_file_time = os.path.getmtime(self.RANDOMFOREST_MODEL_PATH)
             
@@ -64,12 +108,14 @@ class Worker:
           
         logging.info(f"Stream received from Kafka! Processing payload ID: {event_json.get('id', 'Unknown')}")
         features = self.preprocessor.transform_json_to_features(event_json)
-          
-        score_if = self.model_if.decision_function(features)[0]
-          
-        # Only get the probability if the RF model was loaded
+
+        score_if = None
         prob_rf = None
-        if self.model_rf:
+
+        if self.inference_mode in {"if", "hybrid"} and self.model_if is not None:
+          score_if = self.model_if.decision_function(features)[0]
+
+        if self.inference_mode in {"rf", "hybrid"} and self.model_rf is not None:
           prob_rf = self.model_rf.predict_proba(features)[0][1]
           
         is_anomaly = self._judge_prediction(score_if=score_if, prob_rf=prob_rf)
@@ -85,7 +131,12 @@ class Worker:
               dt = datetime.fromtimestamp(date_value / 1_000_000.0, tz=timezone.utc)
               event_json[col] = dt.strftime('%d/%m/%Y %H:%M:%S')
 
-          model_used = "Hybrid (RF+IF)" if prob_rf is not None else "IsolationForest_v1"
+          if self.inference_mode == "rf":
+            model_used = "RandomForest_v1"
+          elif self.inference_mode == "if":
+            model_used = "IsolationForest_v1"
+          else:
+            model_used = "Hybrid (RF+IF)"
 
           payload_anomaly = {
             "id": f"ALRT-{event_json.get('id', 'N/A')}",
@@ -108,32 +159,28 @@ class Worker:
         logging.error(f"An unexpected error occured while predicting the features: {e}")
       
   def _judge_prediction(self,score_if:float,prob_rf:float = None) -> bool:
-    """This is the implementation of a hybrid ML model, that uses IsolationForest to discover new anomlies patterns,
-    and simultaneosly uses RandomForestClassifier to increase the prediction accuracy of known anomalies
+    """Decide whether an event is anomalous using the selected inference mode."""
+    if self.inference_mode == "rf":
+      return prob_rf is not None and prob_rf > self.RF_HIGH_CONFIDENCE_THRESHOLD
 
-    Args:
-        score_if (float): Score predicted by IsolationForest
-        score_rf (float): Score predicted by RandomForest
+    if self.inference_mode == "if":
+      return score_if is not None and score_if < self.IF_STANDALONE_THRESHOLD
 
-    Returns:
-        bool: True = The event is an anomaly
-    """
     if prob_rf is not None:
       #If Random forest has more than 85% sure, the event is an anomaly
       if prob_rf > self.RF_HIGH_CONFIDENCE_THRESHOLD:
         return True
       
       #If Random forest was not so sure on the event, but Isolation forest thought it was a weird event,then is an anomaly
-      if prob_rf > self.RF_MODERATE_THRESHOLD and score_if < self.IF_COMBINED_THRESHOLD: 
+      if prob_rf > self.RF_MODERATE_THRESHOLD and score_if is not None and score_if < self.IF_COMBINED_THRESHOLD: 
         return True
     
-    if score_if < self.IF_STANDALONE_THRESHOLD:
-      return True
-      
-    return False
+    return score_if is not None and score_if < self.IF_STANDALONE_THRESHOLD
   
   def _load_models(self):
     """Loads all available models and preprocessor at startup."""
+
+    self._sync_inference_mode_from_db()
 
     engine = get_db_engine()
     version_record = None
@@ -163,32 +210,41 @@ class Worker:
           self.target_table,
       )
 
-    # --- Load Isolation Forest (Mandatory) ---
-    try:
-      logging.info("Loading Unsupervised Model (Isolation Forest) from %s...", self.ISOLATIONFOREST_MODEL_PATH)
-      self.preprocessor = DynamicPreprocessor(
-        table_name=self.target_table,
-        columns_to_ignore=self.columns_to_ignore,
-        translator_path=self.TRANSLATOR_PATH,
-        scaler_path=self.SCALER_PATH,
-      )
-      self.model_if = joblib.load(self.ISOLATIONFOREST_MODEL_PATH)
-    except FileNotFoundError:
-      logging.error(f"Isolation Forest model not found at {self.ISOLATIONFOREST_MODEL_PATH}. Worker cannot start.")
-      return False
-    except Exception as e:
-      logging.error(f"Failed to load Isolation Forest model: {e}")
-      return False
-      
-    try:
-      if self.RANDOMFOREST_MODEL_PATH and os.path.exists(self.RANDOMFOREST_MODEL_PATH):
-        logging.info("Loading Supervised Model (Random Forest) from %s...", self.RANDOMFOREST_MODEL_PATH)
-        self.model_rf = joblib.load(self.RANDOMFOREST_MODEL_PATH)
-      else:
-        logging.warning("Random Forest model not found. Running in Unsupervised-Only mode.")
-    except Exception as e:
-      logging.error(f"Failed to load Random Forest model, will proceed without it. Error: {e}")
-      self.model_rf = None
+    logging.info("Selected inference mode: %s", self.inference_mode)
+
+    self.preprocessor = DynamicPreprocessor(
+      table_name=self.target_table,
+      columns_to_ignore=self.columns_to_ignore,
+      translator_path=self.TRANSLATOR_PATH,
+      scaler_path=self.SCALER_PATH,
+    )
+
+    if self.inference_mode in {"if", "hybrid"}:
+      try:
+        logging.info("Loading Unsupervised Model (Isolation Forest) from %s...", self.ISOLATIONFOREST_MODEL_PATH)
+        self.model_if = joblib.load(self.ISOLATIONFOREST_MODEL_PATH)
+      except FileNotFoundError:
+        logging.error(f"Isolation Forest model not found at {self.ISOLATIONFOREST_MODEL_PATH}. Worker cannot start.")
+        return False
+      except Exception as e:
+        logging.error(f"Failed to load Isolation Forest model: {e}")
+        return False
+    else:
+      logging.info("Skipping Isolation Forest load because the selected mode is '%s'.", self.inference_mode)
+
+    if self.inference_mode in {"rf", "hybrid"}:
+      try:
+        if self.RANDOMFOREST_MODEL_PATH and os.path.exists(self.RANDOMFOREST_MODEL_PATH):
+          logging.info("Loading Supervised Model (Random Forest) from %s...", self.RANDOMFOREST_MODEL_PATH)
+          self.model_rf = joblib.load(self.RANDOMFOREST_MODEL_PATH)
+        else:
+          logging.warning("Random Forest model not found. Cannot start in '%s' mode.", self.inference_mode)
+          return False
+      except Exception as e:
+        logging.error(f"Failed to load Random Forest model. Error: {e}")
+        return False
+    else:
+      logging.info("Skipping Random Forest load because the selected mode is '%s'.", self.inference_mode)
       
     if os.path.exists(self.ISOLATIONFOREST_MODEL_PATH):
       self.last_model_version_time = os.path.getmtime(self.ISOLATIONFOREST_MODEL_PATH)
@@ -206,9 +262,15 @@ class Worker:
         pipeline_name VARCHAR(100),
         columns_to_ignore TEXT,
         date_columns TEXT,
+        inference_mode VARCHAR(50) DEFAULT 'hybrid',
         status VARCHAR(20) DEFAULT 'active',
         last_startup TIMESTAMP
       );
+    """)
+
+    alter_table_query = text("""
+      ALTER TABLE pipelines_config
+      ADD COLUMN IF NOT EXISTS inference_mode VARCHAR(50) DEFAULT 'hybrid';
     """)
 
     cols_ignore_str = ",".join(self.columns_to_ignore) if self.columns_to_ignore else ""
@@ -217,12 +279,13 @@ class Worker:
     nome_bonito = f"Worker de {self.target_table.replace('_', ' ').title()}"
 
     upsert_query = text("""
-      INSERT INTO pipelines_config (target_table, pipeline_name, columns_to_ignore, date_columns, last_startup)
-      VALUES (:target, :name, :cols, :dates, CURRENT_TIMESTAMP)
+      INSERT INTO pipelines_config (target_table, pipeline_name, columns_to_ignore, date_columns, inference_mode, last_startup)
+      VALUES (:target, :name, :cols, :dates, :inference_mode, CURRENT_TIMESTAMP)
       ON CONFLICT (target_table)
       DO UPDATE SET 
         columns_to_ignore = EXCLUDED.columns_to_ignore,
         date_columns = EXCLUDED.date_columns,
+        inference_mode = EXCLUDED.inference_mode,
         last_startup = EXCLUDED.last_startup,
         status = 'active';
     """)
@@ -230,11 +293,13 @@ class Worker:
     try:
       with engine.connect() as conn:
         conn.execute(create_table_query)
+        conn.execute(alter_table_query)
         conn.execute(upsert_query, {
           "target": self.target_table,
           "name": nome_bonito,
           "cols": cols_ignore_str,
-          "dates": dates_str
+          "dates": dates_str,
+          "inference_mode": self.inference_mode,
         })
         conn.commit()
         logging.info(f"Pipeline {self.target_table} inserted in anomalies hub")

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Layers, CheckCircle, ArrowRightCircle } from 'lucide-react';
+import { Layers, CheckCircle, ArrowRightCircle, Settings2 } from 'lucide-react';
 import { fraudService } from '../services/services';
 import type { ModelVersion } from '../types/types';
 import { Button, Card, PageHeader, SkeletonCard, ErrorBanner, EmptyState, useToast } from '../components/ui';
@@ -11,6 +11,9 @@ export default function ModelVersionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activating, setActivating] = useState<string | null>(null);
+  const [inferenceMode, setInferenceMode] = useState<'if' | 'rf' | 'hybrid'>('hybrid');
+  const [modeSaving, setModeSaving] = useState(false);
+  const [modeError, setModeError] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchVersions = () => {
@@ -24,8 +27,20 @@ export default function ModelVersionsPage() {
       .finally(() => setLoading(false));
   };
 
+  const fetchPipelineConfig = () => {
+    if (!tableName) return;
+
+    fraudService.getPipelineConfig(tableName)
+      .then(data => {
+        setInferenceMode((data.inference_mode as 'if' | 'rf' | 'hybrid') || 'hybrid');
+        setModeError(null);
+      })
+      .catch(() => setModeError('Could not load the current inference mode.'));
+  };
+
   useEffect(() => {
     fetchVersions();
+    fetchPipelineConfig();
   }, [tableName]);
 
   const handleActivate = async (version: string) => {
@@ -39,6 +54,22 @@ export default function ModelVersionsPage() {
       toast('Failed to activate selected version.', 'error');
     } finally {
       setActivating(null);
+    }
+  };
+
+  const handleInferenceModeChange = async (mode: 'if' | 'rf' | 'hybrid') => {
+    if (!tableName) return;
+    setModeSaving(true);
+    setModeError(null);
+    try {
+      await fraudService.updatePipelineInferenceMode(tableName, mode);
+      setInferenceMode(mode);
+      toast(`Inference mode set to ${mode} for ${tableName}`, 'success');
+    } catch {
+      setModeError('Failed to update inference mode. Please try again.');
+      toast('Failed to update inference mode.', 'error');
+    } finally {
+      setModeSaving(false);
     }
   };
 
@@ -56,6 +87,36 @@ export default function ModelVersionsPage() {
       )}
 
       {error && <ErrorBanner message={error} onRetry={fetchVersions} />}
+
+      {!loading && !error && tableName && (
+        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2">
+              <div className="mt-0.5 rounded-lg bg-slate-100 p-2 text-slate-600">
+                <Settings2 className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Inference mode</p>
+                <p className="text-sm text-slate-500">Choose which model strategy the worker should use for this pipeline.</p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 sm:items-end">
+              <select
+                value={inferenceMode}
+                onChange={(event) => handleInferenceModeChange(event.target.value as 'if' | 'rf' | 'hybrid')}
+                disabled={modeSaving}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <option value="if">Isolation Forest</option>
+                <option value="rf">Random Forest</option>
+                <option value="hybrid">Hybrid</option>
+              </select>
+              {modeSaving && <p className="text-xs text-slate-500">Saving...</p>}
+              {modeError && <p className="text-xs text-rose-600">{modeError}</p>}
+            </div>
+          </div>
+        </div>
+      )}
 
       {!loading && !error && versions.length === 0 && (
         <EmptyState

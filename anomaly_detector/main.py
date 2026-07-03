@@ -69,6 +69,7 @@ else:
 TRANSLATOR_PATH = f'models/{TARGET_TABLE}_translator.pkl'
 MODEL_PATH = f'models/{TARGET_TABLE}_if_model.pkl'
 MODEL_VERSION = os.getenv("MODEL_VERSION")
+MODEL_INFERENCE_MODE = os.getenv("MODEL_INFERENCE_MODE", "hybrid")
 
 
 if not os.path.exists(TRANSLATOR_PATH) or not os.path.exists(MODEL_PATH):
@@ -85,6 +86,7 @@ worker = Worker(
   columns_to_ignore=COLUMNS_TO_IGNORE,
   date_columns=DATE_COLUMNS,
   model_version=MODEL_VERSION,
+  inference_mode=MODEL_INFERENCE_MODE,
 )
 
 

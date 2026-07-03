@@ -3,6 +3,7 @@ export interface Pipeline {
   pipeline_name: string;
   status: string;
   last_startup: string;
+  inference_mode?: string | null;
   // stats que vamos adicionar depois no backend:
   pending_count?: number; 
 }
