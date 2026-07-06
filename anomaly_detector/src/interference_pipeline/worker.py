@@ -212,12 +212,19 @@ class Worker:
 
     logging.info("Selected inference mode: %s", self.inference_mode)
 
-    self.preprocessor = DynamicPreprocessor(
-      table_name=self.target_table,
-      columns_to_ignore=self.columns_to_ignore,
-      translator_path=self.TRANSLATOR_PATH,
-      scaler_path=self.SCALER_PATH,
-    )
+    try:
+      self.preprocessor = DynamicPreprocessor(
+        table_name=self.target_table,
+        columns_to_ignore=self.columns_to_ignore,
+        translator_path=self.TRANSLATOR_PATH,
+        scaler_path=self.SCALER_PATH,
+      )
+    except FileNotFoundError as exc:
+      logging.error("Failed to initialize preprocessor for '%s': %s", self.target_table, exc)
+      return False
+    except Exception as exc:
+      logging.error("Failed to initialize preprocessor for '%s': %s", self.target_table, exc)
+      return False
 
     if self.inference_mode in {"if", "hybrid"}:
       try:
@@ -238,11 +245,21 @@ class Worker:
           logging.info("Loading Supervised Model (Random Forest) from %s...", self.RANDOMFOREST_MODEL_PATH)
           self.model_rf = joblib.load(self.RANDOMFOREST_MODEL_PATH)
         else:
-          logging.warning("Random Forest model not found. Cannot start in '%s' mode.", self.inference_mode)
-          return False
+          if self.inference_mode == "rf":
+            logging.warning("Random Forest model not found. Cannot start in '%s' mode.", self.inference_mode)
+            return False
+
+          logging.warning(
+            "Random Forest model not found. Falling back to Isolation Forest mode for '%s'.",
+            self.target_table,
+          )
+          self.inference_mode = "if"
       except Exception as e:
         logging.error(f"Failed to load Random Forest model. Error: {e}")
-        return False
+        if self.inference_mode == "rf":
+          return False
+        logging.warning("Falling back to Isolation Forest mode due to Random Forest load failure.")
+        self.inference_mode = "if"
     else:
       logging.info("Skipping Random Forest load because the selected mode is '%s'.", self.inference_mode)
       

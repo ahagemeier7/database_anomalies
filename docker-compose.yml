@@ -89,6 +89,7 @@ services:
   worker-insurance:
     build: 
       context: ./anomaly_detector
+      dockerfile: DockerFile
     container_name: worker_insurance
     restart: on-failure
     environment:
@@ -113,13 +114,13 @@ services:
       - POSTGRES_SERVER_INTERNAL=postgres-internal:5432
 
       #Defining the tresholds, depending on the logic of the use
-      - RF_HIGH_CONFIDENCE_THRESHOLD = 0.85   # RF alone triggers the anomaly
-      - RF_MODERATE_THRESHOLD = 0.4           # RF + IF combined
-      - IF_COMBINED_THRESHOLD = -0.15         # IF to combined vote
-      - IF_STANDALONE_THRESHOLD = -0.1
+      - RF_HIGH_CONFIDENCE_THRESHOLD=0.85
+      - RF_MODERATE_THRESHOLD=0.4
+      - IF_COMBINED_THRESHOLD=-0.15
+      - IF_STANDALONE_THRESHOLD=-0.1
 
       #Defining the contamination of the set
-      - CONTAMINATION = 0.01
+      - CONTAMINATION=0.01
 
       #If the table have date columns, you need to add the names separated with comma
       # - DATE_COLUMNS=
@@ -136,6 +137,7 @@ services:
   anomaly-handler:
     build: 
       context: ./anomaly_handler 
+      dockerfile: DockerFile
     container_name: anomaly_handler
     restart: on-failure
     environment:
@@ -156,6 +158,7 @@ services:
   hub-backend:
     build: 
       context: ./anomalies_hub_backend
+      dockerfile: DockerFile
     container_name: hub-backend
     ports:
       - "8000:8000"
