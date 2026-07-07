@@ -14,11 +14,13 @@ from src.interference_pipeline.worker import Worker
     "mode, score_if, prob_rf, expected",
     [
         ("if", -0.2, None, True),
-        ("if", -0.05, None, False),
+        ("if", -0.05, None, True),
+        ("if", 0.05, None, False),
         ("rf", None, 0.9, True),
         ("rf", None, 0.2, False),
         ("hybrid", -0.2, 0.3, True),
         ("hybrid", -0.2, 0.5, True),
+        ("hybrid", 0.2, 0.3, False),
     ],
 )
 def test_judge_prediction_modes(mode, score_if, prob_rf, expected):

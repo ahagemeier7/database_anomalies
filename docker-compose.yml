@@ -71,6 +71,68 @@ services:
       - kafka
       - postgres-source
 
+  kafka-connect-setup:
+    image: curlimages/curl:latest
+    container_name: kafka-connect-setup
+    restart: "no"
+    depends_on:
+      kafka-connect:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until curl -sf http://kafka-connect:8083/connectors >/dev/null 2>&1; do
+          echo "Waiting for Kafka Connect to be ready..."
+          sleep 5
+        done
+
+        if curl -sf http://kafka-connect:8083/connectors/source-postgres >/dev/null 2>&1; then
+          echo "Connector source-postgres already exists. Updating configuration..."
+          curl -s -X PUT http://kafka-connect:8083/connectors/source-postgres/config \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+              "plugin.name": "pgoutput",
+              "database.hostname": "postgres-source",
+              "database.port": "5432",
+              "database.user": "postgres",
+              "database.password": "postgres",
+              "database.dbname": "db_real",
+              "topic.prefix": "source-postgres",
+              "table.include.list": "public.insurance_claims",
+              "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+              "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+              "key.converter.schemas.enable": "false",
+              "value.converter.schemas.enable": "false",
+              "decimal.handling.mode": "double",
+              "snapshot.mode": "initial"
+            }'
+        else
+          echo "Creating connector source-postgres..."
+          curl -s -X POST http://kafka-connect:8083/connectors \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "name": "source-postgres",
+              "config": {
+                "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+                "plugin.name": "pgoutput",
+                "database.hostname": "postgres-source",
+                "database.port": "5432",
+                "database.user": "postgres",
+                "database.password": "postgres",
+                "database.dbname": "db_real",
+                "topic.prefix": "source-postgres",
+                "table.include.list": "public.insurance_claims",
+                "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+                "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+                "key.converter.schemas.enable": "false",
+                "value.converter.schemas.enable": "false",
+                "decimal.handling.mode": "double",
+                "snapshot.mode": "initial"
+              }
+            }'
+        fi
+
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     ports:

@@ -30,16 +30,36 @@ class Worker:
     self.last_model_version_time = 0
     self.last_inference_mode = self.inference_mode
 
-    self.ISOLATIONFOREST_MODEL_PATH = f"models/{self.target_table}_if_model.pkl"
-    self.RANDOMFOREST_MODEL_PATH = f"models/{self.target_table}_rf_model.pkl"
-    self.TRANSLATOR_PATH = f"models/{self.target_table}_translator.pkl"
-    self.SCALER_PATH = f"models/{self.target_table}_scaler.pkl"
+    self.base_models_dir = self._resolve_models_dir()
+    self.ISOLATIONFOREST_MODEL_PATH = os.path.join(self.base_models_dir, f"{self.target_table}_if_model.pkl")
+    self.RANDOMFOREST_MODEL_PATH = os.path.join(self.base_models_dir, f"{self.target_table}_rf_model.pkl")
+    self.TRANSLATOR_PATH = os.path.join(self.base_models_dir, f"{self.target_table}_translator.pkl")
+    self.SCALER_PATH = os.path.join(self.base_models_dir, f"{self.target_table}_scaler.pkl")
     self.USE_VERSIONED_MODEL = False
 
     self.RF_HIGH_CONFIDENCE_THRESHOLD = 0.85   # RF alone triggers the anomaly
     self.RF_MODERATE_THRESHOLD = 0.4           # RF + IF combined
-    self.IF_COMBINED_THRESHOLD = -0.15         # IF to combined vote
-    self.IF_STANDALONE_THRESHOLD = -0.1        # IF triggers anomaly
+    self.IF_COMBINED_THRESHOLD = 0.0           # IF to combined vote (negative decision_function = anomaly)
+    self.IF_STANDALONE_THRESHOLD = 0.0         # IF triggers anomaly when decision_function < 0
+
+  def _resolve_models_dir(self) -> str:
+    candidates = []
+    cwd = os.getcwd()
+    if cwd:
+      candidates.append(os.path.join(cwd, "models"))
+      candidates.append(os.path.join(cwd, "src", "models"))
+    candidates.extend([
+      os.path.join("/app", "models"),
+      os.path.join("/app", "src", "models"),
+      os.path.join(os.path.dirname(__file__), "..", "..", "src", "models"),
+      os.path.join(os.path.dirname(__file__), "..", "models"),
+    ])
+
+    for candidate in candidates:
+      if os.path.isdir(candidate):
+        return candidate
+
+    return os.path.join(cwd or ".", "models")
 
   def _normalize_inference_mode(self, inference_mode: Optional[str]) -> str:
     if inference_mode is None:

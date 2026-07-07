@@ -106,7 +106,7 @@ docker compose down
 cp .env.example .env
 
 # Iniciar os serviços e o seed de dados
-docker compose --profile seed up --build
+docker compose --profile seed up --build -d
 ```
 
 ### Como verificar se tudo subiu

@@ -10,8 +10,8 @@ def consumer_kafka_stream(topic: str,group_id: str):
 
   conf = {
     'bootstrap.servers' : bootstrap_servers,
-    'group.id': group_id,     
-    'auto.offset.reset': 'latest',
+    'group.id': group_id,
+    'auto.offset.reset': 'earliest',
     'allow.auto.create.topics': True
   }
 
@@ -38,14 +38,18 @@ def consumer_kafka_stream(topic: str,group_id: str):
       valor_byte = msg.value()
 
       if valor_byte:
-        data = json.loads(valor_byte.decode('utf-8'))
+        try:
+          data = json.loads(valor_byte.decode('utf-8'))
+        except json.JSONDecodeError as exc:
+          logging.warning(f"Skipping invalid JSON message: {exc}")
+          continue
 
         operation = data.get('op')
 
-        if operation in ['c','r']:
+        if operation in ['c', 'r']:
           new_registry = data.get('after')
-
-          yield new_registry
+          if isinstance(new_registry, dict):
+            yield new_registry
   except Exception as e:
     logging.error(f"An unexpected error occured while listening to kafka stream: {e}")
   except KeyboardInterrupt:
