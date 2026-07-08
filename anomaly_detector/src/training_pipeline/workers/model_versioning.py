@@ -131,7 +131,7 @@ def insert_model_version_record(
         :if_model_path,
         :scaler_path,
         :rf_model_path,
-        :metrics,
+        :metrics::jsonb,
         :is_active
       )
       ON CONFLICT (target_table, version) DO UPDATE SET
@@ -144,8 +144,6 @@ def insert_model_version_record(
         created_at = CURRENT_TIMESTAMP;
     """)
 
-    metrics_json = json.dumps(metrics) if metrics is not None else None
-
     with engine.connect() as conn:
         conn.execute(query, {
             "target_table": target_table,
@@ -154,7 +152,7 @@ def insert_model_version_record(
             "if_model_path": paths["if_model"],
             "scaler_path": paths["scaler"],
             "rf_model_path": paths.get("rf_model"),
-            "metrics": metrics_json,
+            "metrics": json.dumps(metrics) if metrics is not None else None,
             "is_active": is_active,
         })
         conn.commit()

@@ -88,7 +88,7 @@ def update_pipeline_inference_mode(engine: Engine, target_table: str, inference_
     )
 
 
-def insert_model_version(engine: Engine, target_table: str, version: str, paths: dict, metrics: dict | None = None, is_active: bool = False):
+def insert_model_version_record(engine: Engine, target_table: str, version: str, paths: dict, metrics: dict | None = None, is_active: bool = False):
   ensure_model_versions_schema(engine)
   query = text("""
     INSERT INTO model_versions (
@@ -107,7 +107,7 @@ def insert_model_version(engine: Engine, target_table: str, version: str, paths:
       :if_model_path,
       :scaler_path,
       :rf_model_path,
-      :metrics,
+      :metrics::jsonb,
       :is_active
     )
     ON CONFLICT (target_table, version) DO UPDATE SET
@@ -120,8 +120,6 @@ def insert_model_version(engine: Engine, target_table: str, version: str, paths:
       created_at = CURRENT_TIMESTAMP;
   """)
 
-  metrics_json = json.dumps(metrics) if metrics is not None else None
-
   with engine.connect() as conn:
     conn.execute(query, {
       "target_table": target_table,
@@ -130,10 +128,20 @@ def insert_model_version(engine: Engine, target_table: str, version: str, paths:
       "if_model_path": paths["if_model"],
       "scaler_path": paths["scaler"],
       "rf_model_path": paths.get("rf_model"),
-      "metrics": metrics_json,
+      "metrics": json.dumps(metrics) if metrics is not None else None,
       "is_active": is_active,
     })
     conn.commit()
+
+
+def _parse_metrics(row: dict) -> dict:
+  """Parse metrics field that may be stored as a JSON string or already a dict."""
+  if row.get("metrics") is not None and isinstance(row["metrics"], str):
+    try:
+      row["metrics"] = json.loads(row["metrics"])
+    except (json.JSONDecodeError, TypeError):
+      pass
+  return row
 
 
 def get_model_versions(engine: Engine, target_table: str):
@@ -144,7 +152,7 @@ def get_model_versions(engine: Engine, target_table: str):
   )
   with engine.connect() as conn:
     result = conn.execute(query, {"target_table": target_table}).mappings().all()
-    return [dict(row) for row in result]
+    return [_parse_metrics(dict(row)) for row in result]
 
 
 def get_active_model_version(engine: Engine, target_table: str):
@@ -154,7 +162,8 @@ def get_active_model_version(engine: Engine, target_table: str):
     "FROM model_versions WHERE target_table = :target_table AND is_active = true LIMIT 1"
   )
   with engine.connect() as conn:
-    return conn.execute(query, {"target_table": target_table}).mappings().first()
+    row = conn.execute(query, {"target_table": target_table}).mappings().first()
+    return _parse_metrics(dict(row)) if row else None
 
 
 def get_model_version(engine: Engine, target_table: str, version: str):
@@ -164,7 +173,8 @@ def get_model_version(engine: Engine, target_table: str, version: str):
     "FROM model_versions WHERE target_table = :target_table AND version = :version LIMIT 1"
   )
   with engine.connect() as conn:
-    return conn.execute(query, {"target_table": target_table, "version": version}).mappings().first()
+    row = conn.execute(query, {"target_table": target_table, "version": version}).mappings().first()
+    return _parse_metrics(dict(row)) if row else None
 
 
 def activate_model_version(engine: Engine, target_table: str, version: str):
