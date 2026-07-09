@@ -15,9 +15,8 @@ from schemas.schemas import (
 )
 from crud import pipeline
 
-#Adding the /app suffix so that python finds the shared volume
 sys.path.append('/app')
-from training_pipeline.workers.worker_models_retraining import retrain_hybrid_models
+from src.training_pipeline.workers.worker_models_retraining import retrain_hybrid_models
 
 router = APIRouter()
 

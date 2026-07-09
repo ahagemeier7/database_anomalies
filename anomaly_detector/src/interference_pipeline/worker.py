@@ -27,7 +27,8 @@ class Worker:
     self.model_if: IsolationForest = None
     self.model_rf: RandomForestClassifier = None
 
-    self.last_model_version_time = 0
+    self.last_active_version: Optional[str] = None
+    self.last_model_files_mtime: dict[str, float] = {}
     self.last_inference_mode = self.inference_mode
 
     self.base_models_dir = self._resolve_models_dir()
@@ -101,6 +102,43 @@ class Worker:
     except Exception as exc:
       logging.warning("Could not sync inference mode from DB: %s", exc)
 
+  def _check_active_version_changed(self) -> bool:
+    """Check the DB to see if a different model version is now active.
+    Only triggers after the initial load (when last_active_version is set)."""
+    if self.last_active_version is None:
+      return False
+    try:
+      engine = get_db_engine()
+      active = get_active_model_version(engine, self.target_table)
+      if active and active["version"] != self.last_active_version:
+        logging.info(
+          "Active model version changed from '%s' to '%s'. Reloading...",
+          self.last_active_version, active["version"],
+        )
+        return True
+    except Exception as exc:
+      logging.warning("Could not check active version from DB: %s", exc)
+    return False
+
+  def _check_model_files_changed(self) -> bool:
+    """Check if any loaded model file has a newer mtime on disk."""
+    model_paths_to_check = [
+        self.ISOLATIONFOREST_MODEL_PATH,
+        self.TRANSLATOR_PATH,
+        self.SCALER_PATH,
+    ]
+    if self.RANDOMFOREST_MODEL_PATH:
+        model_paths_to_check.append(self.RANDOMFOREST_MODEL_PATH)
+
+    for path in model_paths_to_check:
+        if os.path.exists(path):
+            current_mtime = os.path.getmtime(path)
+            last_mtime = self.last_model_files_mtime.get(path, 0)
+            if current_mtime > last_mtime:
+                logging.warning("Model file changed: %s, reloading...", path)
+                return True
+    return False
+
   def start_detection(self) -> None:
     self._register_pipeline()
     
@@ -118,11 +156,9 @@ class Worker:
       try:
         self._sync_inference_mode_from_db(reload_models=True)
 
-        if os.path.exists(self.RANDOMFOREST_MODEL_PATH):
-          current_file_time = os.path.getmtime(self.RANDOMFOREST_MODEL_PATH)
-            
-          if current_file_time > self.last_model_version_time:
-            logging.warning("New model detected, reloading...")
+        # Check if active model version changed in DB (versioned mode)
+        # or if any model file was updated on disk (legacy/latest mode)
+        if self._check_active_version_changed() or self._check_model_files_changed():
             self._load_models()
             logging.warning("Reload complete")
           
@@ -283,8 +319,24 @@ class Worker:
     else:
       logging.info("Skipping Random Forest load because the selected mode is '%s'.", self.inference_mode)
       
-    if os.path.exists(self.ISOLATIONFOREST_MODEL_PATH):
-      self.last_model_version_time = os.path.getmtime(self.ISOLATIONFOREST_MODEL_PATH)
+    # Record the active version so we can detect future changes
+    if version_record:
+        self.last_active_version = version_record["version"]
+    else:
+        self.last_active_version = None
+
+    # Record current mtime for all loaded model files to detect future changes
+    model_paths_to_track = [
+        self.ISOLATIONFOREST_MODEL_PATH,
+        self.TRANSLATOR_PATH,
+        self.SCALER_PATH,
+    ]
+    if self.RANDOMFOREST_MODEL_PATH:
+        model_paths_to_track.append(self.RANDOMFOREST_MODEL_PATH)
+
+    for path in model_paths_to_track:
+        if os.path.exists(path):
+            self.last_model_files_mtime[path] = os.path.getmtime(path)
 
     return True
         

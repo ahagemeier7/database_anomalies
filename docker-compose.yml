@@ -238,10 +238,8 @@ services:
       - POSTGRES_DB_INTERNAL=db_seguranca 
       - POSTGRES_SERVER_INTERNAL=postgres-internal:5432
     volumes:
-      
       - ./anomaly_detector/src/models:/app/models
-      
-      - ./anomaly_detector/src/training_pipeline:/app/training_pipeline
+      - ./anomaly_detector/src:/app/src
     depends_on:
       - postgres-internal
 

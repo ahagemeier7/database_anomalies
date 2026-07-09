@@ -4,9 +4,10 @@ import logging
 import joblib
 import pandas as pd
 from dotenv import load_dotenv
-from training_pipeline.db.db_internal import get_db_engine as get_db_engine_iternal
-from training_pipeline.db.db_source import get_db_engine as get_db_engine_source
-from training_pipeline.workers.model_versioning import (
+from src.training_pipeline.db.db_internal import get_db_engine as get_db_engine_iternal
+from src.training_pipeline.db.db_source import get_db_engine as get_db_engine_source
+from sqlalchemy import text
+from src.training_pipeline.workers.model_versioning import (
     save_versioned_models,
     insert_model_version_record,
 )
@@ -148,8 +149,23 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
       model_metadata["version"],
       model_metadata["paths"],
       metrics=metrics,
-      is_active=False,
+      is_active=True,
     )
+
+    # Automatically activate this new version in pipelines_config
+    version_tag = model_metadata["version"]
+    with engine_internal.connect() as conn:
+      conn.execute(
+        text("UPDATE model_versions SET is_active = false WHERE target_table = :target_table AND version != :version"),
+        {"target_table": target_table, "version": version_tag}
+      )
+      conn.execute(
+        text("UPDATE pipelines_config SET active_model_version = :version WHERE target_table = :target_table"),
+        {"target_table": target_table, "version": version_tag}
+      )
+      conn.commit()
+
+    logging.info("New model version %s activated for table '%s'.", version_tag, target_table)
 
   except Exception as e:
     logging.error(f"Critical error during model retrain {e}")

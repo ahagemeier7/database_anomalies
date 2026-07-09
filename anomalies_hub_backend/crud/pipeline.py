@@ -1,34 +1,16 @@
 import json
+import sys
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-def ensure_model_versions_schema(engine: Engine):
-  create_table_query = text("""
-    CREATE TABLE IF NOT EXISTS model_versions (
-      id SERIAL PRIMARY KEY,
-      target_table VARCHAR(100) NOT NULL,
-      version VARCHAR(50) NOT NULL,
-      translator_path TEXT NOT NULL,
-      if_model_path TEXT NOT NULL,
-      scaler_path TEXT NOT NULL,
-      rf_model_path TEXT,
-      metrics JSONB,
-      is_active BOOLEAN DEFAULT FALSE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(target_table, version)
-    );
-  """)
-
-  alter_table_query = text("""
-    ALTER TABLE pipelines_config
-    ADD COLUMN IF NOT EXISTS active_model_version VARCHAR(50),
-    ADD COLUMN IF NOT EXISTS inference_mode VARCHAR(50) DEFAULT 'hybrid';
-  """)
-
-  with engine.connect() as conn:
-    conn.execute(create_table_query)
-    conn.execute(alter_table_query)
-    conn.commit()
+# Import shared model versioning functions from the mounted volume
+sys.path.append('/app')
+from src.training_pipeline.workers.model_versioning import (
+    ensure_model_versions_schema,
+    get_model_version,
+    get_active_model_version,
+    insert_model_version_record,
+)
 
 
 def get_all_pipelines(engine: Engine):
@@ -88,52 +70,6 @@ def update_pipeline_inference_mode(engine: Engine, target_table: str, inference_
     )
 
 
-def insert_model_version_record(engine: Engine, target_table: str, version: str, paths: dict, metrics: dict | None = None, is_active: bool = False):
-  ensure_model_versions_schema(engine)
-  query = text("""
-    INSERT INTO model_versions (
-      target_table,
-      version,
-      translator_path,
-      if_model_path,
-      scaler_path,
-      rf_model_path,
-      metrics,
-      is_active
-    ) VALUES (
-      :target_table,
-      :version,
-      :translator_path,
-      :if_model_path,
-      :scaler_path,
-      :rf_model_path,
-      :metrics::jsonb,
-      :is_active
-    )
-    ON CONFLICT (target_table, version) DO UPDATE SET
-      translator_path = EXCLUDED.translator_path,
-      if_model_path = EXCLUDED.if_model_path,
-      scaler_path = EXCLUDED.scaler_path,
-      rf_model_path = EXCLUDED.rf_model_path,
-      metrics = EXCLUDED.metrics,
-      is_active = EXCLUDED.is_active,
-      created_at = CURRENT_TIMESTAMP;
-  """)
-
-  with engine.connect() as conn:
-    conn.execute(query, {
-      "target_table": target_table,
-      "version": version,
-      "translator_path": paths["translator"],
-      "if_model_path": paths["if_model"],
-      "scaler_path": paths["scaler"],
-      "rf_model_path": paths.get("rf_model"),
-      "metrics": json.dumps(metrics) if metrics is not None else None,
-      "is_active": is_active,
-    })
-    conn.commit()
-
-
 def _parse_metrics(row: dict) -> dict:
   """Parse metrics field that may be stored as a JSON string or already a dict."""
   if row.get("metrics") is not None and isinstance(row["metrics"], str):
@@ -153,28 +89,6 @@ def get_model_versions(engine: Engine, target_table: str):
   with engine.connect() as conn:
     result = conn.execute(query, {"target_table": target_table}).mappings().all()
     return [_parse_metrics(dict(row)) for row in result]
-
-
-def get_active_model_version(engine: Engine, target_table: str):
-  ensure_model_versions_schema(engine)
-  query = text(
-    "SELECT target_table, version, translator_path, if_model_path, scaler_path, rf_model_path, metrics, is_active, created_at "
-    "FROM model_versions WHERE target_table = :target_table AND is_active = true LIMIT 1"
-  )
-  with engine.connect() as conn:
-    row = conn.execute(query, {"target_table": target_table}).mappings().first()
-    return _parse_metrics(dict(row)) if row else None
-
-
-def get_model_version(engine: Engine, target_table: str, version: str):
-  ensure_model_versions_schema(engine)
-  query = text(
-    "SELECT target_table, version, translator_path, if_model_path, scaler_path, rf_model_path, metrics, is_active, created_at "
-    "FROM model_versions WHERE target_table = :target_table AND version = :version LIMIT 1"
-  )
-  with engine.connect() as conn:
-    row = conn.execute(query, {"target_table": target_table, "version": version}).mappings().first()
-    return _parse_metrics(dict(row)) if row else None
 
 
 def activate_model_version(engine: Engine, target_table: str, version: str):
