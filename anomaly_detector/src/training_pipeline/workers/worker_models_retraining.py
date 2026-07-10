@@ -85,6 +85,7 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
 
     rf_trained = False
     r_forest = None
+    rf_metrics = {}  # Will hold precision/recall/f1 if we can compute them
 
     if not df_history.empty and 1 in y.values:
       labeled_ids = df_history['original_id'].unique()
@@ -93,25 +94,51 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
       y_labeled = y[labeled_mask].values
 
       if 1 in y_labeled:
-        # Split into train/test to evaluate model performance
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_labeled, y_labeled, test_size=0.2, stratify=y_labeled, random_state=42
-        )
+        # Ensure we have enough samples for a stratified split
+        unique_classes = set(y_labeled)
+        min_samples_per_class = min((y_labeled == c).sum() for c in unique_classes)
 
-        r_forest = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-        r_forest.fit(X_train, y_train)
+        if min_samples_per_class >= 2:
+          # Enough samples — split, validate, then retrain on full set
+          X_train, X_test, y_train, y_test = train_test_split(
+              X_labeled, y_labeled, test_size=0.2, stratify=y_labeled, random_state=42
+          )
 
-        y_pred = r_forest.predict(X_test)
-        logging.info(
-            f"Random Forest validation (test set: {len(y_test)} samples):\n"
-            f"{classification_report(y_test, y_pred, zero_division=0)}"
-        )
+          r_forest = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+          r_forest.fit(X_train, y_train)
 
-        # Retrain on the full labeled set for the final saved model
-        r_forest.fit(X_labeled, y_labeled)
-        rf_trained = True
-        logging.info(f"Random Forest final model trained on {len(y_labeled)} labeled rows "
-                     f"({(y_labeled == 1).sum()} frauds, {(y_labeled == 0).sum()} false positives)")
+          y_pred = r_forest.predict(X_test)
+          logging.info(
+              f"Random Forest validation (test set: {len(y_test)} samples):\n"
+              f"{classification_report(y_test, y_pred, zero_division=0)}"
+          )
+
+          rf_metrics = {
+            "training_samples": int(len(y_labeled)),
+            "precision": float(precision_score(y_test, y_pred, zero_division=0)),
+            "recall": float(recall_score(y_test, y_pred, zero_division=0)),
+            "f1_score": float(f1_score(y_test, y_pred, zero_division=0)),
+          }
+
+          # Retrain on the full labeled set for the final saved model
+          r_forest.fit(X_labeled, y_labeled)
+          rf_trained = True
+          logging.info(f"Random Forest final model trained on {len(y_labeled)} labeled rows "
+                       f"({(y_labeled == 1).sum()} frauds, {(y_labeled == 0).sum()} false positives)")
+        else:
+          # Not enough samples for a split — train on all labeled data without validation
+          logging.warning(
+            f"Not enough labeled samples per class ({min_samples_per_class}) for train/test split. "
+            "Using all labeled data for training."
+          )
+          r_forest = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+          r_forest.fit(X_labeled, y_labeled)
+          rf_trained = True
+          rf_metrics = {
+            "training_samples": int(len(y_labeled)),
+          }
+          logging.info(f"Random Forest final model trained on {len(y_labeled)} labeled rows "
+                       f"({(y_labeled == 1).sum()} frauds, {(y_labeled == 0).sum()} false positives)")
       else:
         logging.warning('No confirmed fraud in labeled data, skipping random forest')
     else:
@@ -134,14 +161,7 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
       "labeled_data": int(len(df_history)) if not df_history.empty else 0,
       "fraud_count": int((y == 1).sum()),
     }
-
-    if rf_trained:
-      metrics.update({
-        "training_samples": int(len(y_labeled)),
-        "precision": float(precision_score(y_test, y_pred, zero_division=0)),
-        "recall": float(recall_score(y_test, y_pred, zero_division=0)),
-        "f1_score": float(f1_score(y_test, y_pred, zero_division=0)),
-      })
+    metrics.update(rf_metrics)
 
     insert_model_version_record(
       engine_internal,
@@ -169,4 +189,4 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
 
   except Exception as e:
     logging.error(f"Critical error during model retrain {e}")
-    raise 
+    raise

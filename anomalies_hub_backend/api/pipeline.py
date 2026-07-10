@@ -1,5 +1,7 @@
 import sys
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+import logging
+import traceback
+from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.engine import Engine
 
 from db.db import get_db_engine
@@ -84,25 +86,26 @@ def update_inference_mode(target_table: str, payload: InferenceModeUpdatePayload
     tags=["Machine Learning"],
     response_model=RetrainResponse,
     summary="Disparar retreinamento de modelo",
-    description="Inicia o retreinamento assíncrono dos modelos híbridos "
-                "(Isolation Forest + Random Forest) para a tabela alvo informada. "
-                "A tarefa é executada em background.",
+    description="Executa o retreinamento dos modelos híbridos "
+                "(Isolation Forest + Random Forest) para a tabela alvo informada.",
 )
-def trigger_retraining(target_table: str, bg_tasks: BackgroundTasks, db: Engine = Depends(get_db)):
+def trigger_retraining(target_table: str, db: Engine = Depends(get_db)):
   try:
     config = pipeline.get_pipeline_config(db, target_table)
     if not config:
       raise HTTPException(status_code=404, detail="Pipeline not found.")
 
-    cols_to_ignore = config['columns_to_ignore'].split(',') if config['columns_to_ignore'] else[]
+    cols_to_ignore = config['columns_to_ignore'].split(',') if config['columns_to_ignore'] else []
 
-    bg_tasks.add_task(retrain_hybrid_models, target_table, cols_to_ignore)
+    # Executa o retreino de forma síncrona para capturar erros imediatamente
+    retrain_hybrid_models(target_table, cols_to_ignore)
 
-    return {"message": f"Retrain started for the table: {target_table}."}
+    return {"message": f"Retrain completed successfully for the table: {target_table}."}
   except HTTPException:
     raise
   except Exception as e:
-    raise HTTPException(status_code=500, detail=str(e))
+    logging.error("Retrain failed for table '%s': %s\n%s", target_table, str(e), traceback.format_exc())
+    raise HTTPException(status_code=500, detail=f"Retrain failed: {str(e)}")
 
 
 @router.get(
