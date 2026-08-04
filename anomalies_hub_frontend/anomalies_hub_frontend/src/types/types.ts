@@ -2,7 +2,6 @@ export interface Pipeline {
   target_table: string;
   pipeline_name: string;
   status: string;
-  model_mode?: string;
   last_startup: string;
   inference_mode?: string | null;
   // stats que vamos adicionar depois no backend:

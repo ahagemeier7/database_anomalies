@@ -96,6 +96,10 @@ def train_models(target_table: str,columns_to_ignore:list = None) -> None:
       text("UPDATE pipelines_config SET active_model_version = :version WHERE target_table = :target_table"),
       {"target_table": target_table, "version": version_tag}
     )
+    conn.execute(
+      text("UPDATE pipelines_config SET last_startup = CURRENT_TIMESTAMP, status = 'active' WHERE target_table = :table"),
+      {"table": target_table},
+    )
     conn.commit()
 
   logging.info("Initial model version %s activated for table '%s'.", version_tag, target_table)

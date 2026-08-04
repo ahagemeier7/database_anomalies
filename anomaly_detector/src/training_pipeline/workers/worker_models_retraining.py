@@ -1,22 +1,14 @@
 import os
-import json
 import logging
-import joblib
 import pandas as pd
 from dotenv import load_dotenv
-<<<<<<< HEAD
 from sqlalchemy import text
-from training_pipeline.db.db_internal import get_db_engine as get_db_engine_iternal
-from training_pipeline.db.db_source import get_db_engine as get_db_engine_source
-=======
-from src.training_pipeline.db.db_internal import get_db_engine as get_db_engine_iternal
+from src.training_pipeline.db.db_internal import get_db_engine as get_db_engine_internal
 from src.training_pipeline.db.db_source import get_db_engine as get_db_engine_source
-from sqlalchemy import text
 from src.training_pipeline.workers.model_versioning import (
     save_versioned_models,
     insert_model_version_record,
 )
->>>>>>> 22e66d4964e8f53f3e4eca9189753ebf25a8d9cc
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
@@ -31,7 +23,7 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
   contamination = float(os.getenv("CONTAMINATION", "0.01"))
 
   engine_source = get_db_engine_source()
-  engine_internal = get_db_engine_iternal()
+  engine_internal = get_db_engine_internal()
 
   try:
     df_source = pd.read_sql(f"SELECT * FROM {target_table}", engine_source)

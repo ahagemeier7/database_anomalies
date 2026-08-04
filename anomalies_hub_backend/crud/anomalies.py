@@ -97,33 +97,9 @@ def get_stats_by_table(engine: Engine):
 
 def get_dashboard_stats(engine: Engine):
   """Calculate the ML stats for the graphs"""
-<<<<<<< HEAD
-  
-  query_counts = text("""
-    SELECT 
-      COUNT(*) as total_alerts,
-      COUNT(CASE WHEN status = 'pending_revision' THEN 1 END) as pending_reviews,
-      COUNT(CASE WHEN status = 'confirmed_fraud' THEN 1 END) as confirmed_frauds,
-      COUNT(CASE WHEN status = 'false_positive' THEN 1 END) as false_positives
-    FROM anomalies_history;
-  """)
-  
-  query_chart = text("""
-    SELECT
-      DATE(timestamp_detection) as date,
-      COUNT(CASE WHEN status = 'confirmed_fraud' THEN 1 END) as frauds,
-      COUNT(CASE WHEN status = 'false_positive' THEN 1 END) as false_positives
-    FROM anomalies_history
-    GROUP BY DATE(timestamp_detection)
-    ORDER BY date DESC
-    LIMIT 7;
-  """)
-=======
->>>>>>> 22e66d4964e8f53f3e4eca9189753ebf25a8d9cc
-
   try:
     query_counts = text("""
-      SELECT 
+      SELECT
         COUNT(*) as total_alerts,
         COUNT(CASE WHEN status = 'pending_revision' THEN 1 END) as pending_reviews,
         COUNT(CASE WHEN status = 'confirmed_fraud' THEN 1 END) as confirmed_frauds,
@@ -132,13 +108,13 @@ def get_dashboard_stats(engine: Engine):
     """)
 
     query_chart = text("""
-      SELECT 
+      SELECT
         DATE(timestamp_detection) as date,
         COUNT(CASE WHEN status = 'confirmed_fraud' THEN 1 END) as frauds,
         COUNT(CASE WHEN status = 'false_positive' THEN 1 END) as false_positives
       FROM anomalies_history
       GROUP BY DATE(timestamp_detection)
-      ORDER BY date ASC
+      ORDER BY date DESC
       LIMIT 7;
     """)
 
@@ -146,18 +122,6 @@ def get_dashboard_stats(engine: Engine):
       counts = conn.execute(query_counts).mappings().first()
       chart_data = conn.execute(query_chart).mappings().all()
 
-<<<<<<< HEAD
-  return {
-    "total_alerts": counts['total_alerts'] or 0,
-    "pending_reviews": counts['pending_reviews'] or 0,
-    "confirmed_frauds": confirmed,
-    "false_positives": false_pos,
-    "model_metrics": {
-      "precision": round(precision * 100, 1),
-    },
-    "history_chart": [dict(row) for row in reversed(chart_data)]
-  }
-=======
     confirmed = counts['confirmed_frauds'] or 0
     false_pos = counts['false_positives'] or 0
 
@@ -173,7 +137,7 @@ def get_dashboard_stats(engine: Engine):
       "model_metrics": {
         "precision": round(precision * 100, 1),
       },
-      "history_chart": [dict(row) for row in chart_data]
+      "history_chart": [dict(row) for row in reversed(chart_data)]
     }
   except Exception:
     return {
@@ -186,4 +150,3 @@ def get_dashboard_stats(engine: Engine):
       },
       "history_chart": []
     }
->>>>>>> 22e66d4964e8f53f3e4eca9189753ebf25a8d9cc

@@ -95,12 +95,8 @@ def trigger_retraining(target_table: str, db: Engine = Depends(get_db)):
     if not config:
       raise HTTPException(status_code=404, detail="Pipeline not found.")
 
-<<<<<<< HEAD
     cols_ignore_str = config['columns_to_ignore'] or ''
     cols_to_ignore = [c for c in cols_ignore_str.split(',') if c]
-=======
-    cols_to_ignore = config['columns_to_ignore'].split(',') if config['columns_to_ignore'] else []
->>>>>>> 22e66d4964e8f53f3e4eca9189753ebf25a8d9cc
 
     # Executa o retreino de forma síncrona para capturar erros imediatamente
     retrain_hybrid_models(target_table, cols_to_ignore)
