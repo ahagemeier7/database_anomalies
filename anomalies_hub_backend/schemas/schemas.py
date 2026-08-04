@@ -68,7 +68,10 @@ class TableStatsItem(BaseModel):
 
 class PipelineItem(BaseModel):
     target_table: str
+    pipeline_name: str | None = None
+    status: str | None = None
     columns_to_ignore: str | None = None
+    model_mode: str | None = None
     last_startup: datetime | None = None
     pending_count: int = 0
 

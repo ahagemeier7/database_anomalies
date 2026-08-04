@@ -1,6 +1,7 @@
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 import os
+import sys
 import time
 from dotenv import load_dotenv
 from sqlalchemy import text
@@ -76,6 +77,7 @@ if not os.path.exists(TRANSLATOR_PATH) or not os.path.exists(MODEL_PATH):
     train_models(target_table=TARGET_TABLE, columns_to_ignore=COLUMNS_TO_IGNORE)
   except Exception as e:
     logging.error(f"An error has occured while training the models: {e}")
+    sys.exit(1)
 
 
 worker = Worker(

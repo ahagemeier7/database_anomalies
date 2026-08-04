@@ -4,6 +4,7 @@ import logging
 import joblib
 import pandas as pd
 from dotenv import load_dotenv
+from sqlalchemy import text
 from training_pipeline.db.db_internal import get_db_engine as get_db_engine_iternal
 from training_pipeline.db.db_source import get_db_engine as get_db_engine_source
 from sklearn.feature_extraction import DictVectorizer
@@ -128,6 +129,22 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
     else:
       logging.info(f"Isolation Forest saved in {models_dir}")
 
+    # Update pipeline registration with new timestamp
+    try:
+      with engine_internal.connect() as conn:
+        conn.execute(
+          text("""
+            UPDATE pipelines_config
+            SET last_startup = CURRENT_TIMESTAMP, status = 'active'
+            WHERE target_table = :table
+          """),
+          {"table": target_table},
+        )
+        conn.commit()
+        logging.info(f"Pipeline '{target_table}' updated after retraining.")
+    except Exception as e:
+      logging.warning(f"Could not update pipelines_config after retraining: {e}")
+
   except Exception as e:
     logging.error(f"Critical error during model retrain {e}")
-    raise 
+    raise

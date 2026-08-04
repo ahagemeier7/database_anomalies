@@ -2,9 +2,10 @@ export interface Pipeline {
   target_table: string;
   pipeline_name: string;
   status: string;
+  model_mode?: string;
   last_startup: string;
   // stats que vamos adicionar depois no backend:
-  pending_count?: number; 
+  pending_count?: number;
 }
 
 export interface Anomaly {

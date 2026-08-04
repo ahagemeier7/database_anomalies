@@ -30,10 +30,13 @@ class Worker:
     self.ISOLATIONFOREST_MODEL_PATH = f"models/{self.target_table}_if_model.pkl"
     self.RANDOMFOREST_MODEL_PATH = f"models/{self.target_table}_rf_model.pkl"
     
-    self.RF_HIGH_CONFIDENCE_THRESHOLD = 0.85   # RF alone triggers the anomaly
-    self.RF_MODERATE_THRESHOLD = 0.4           # RF + IF combined
-    self.IF_COMBINED_THRESHOLD = -0.15         # IF to combined vote
-    self.IF_STANDALONE_THRESHOLD = -0.1        # IF triggers anomaly
+    self.RF_HIGH_CONFIDENCE_THRESHOLD = float(os.getenv("RF_HIGH_CONFIDENCE_THRESHOLD", "0.85"))
+    self.RF_MODERATE_THRESHOLD = float(os.getenv("RF_MODERATE_THRESHOLD", "0.4"))
+    self.IF_COMBINED_THRESHOLD = float(os.getenv("IF_COMBINED_THRESHOLD", "-0.15"))
+    self.IF_STANDALONE_THRESHOLD = float(os.getenv("IF_STANDALONE_THRESHOLD", "-0.1"))
+
+    # "hybrid" = IF + RF combined voting, "if_only" = Isolation Forest only
+    self.MODEL_MODE = os.getenv("MODEL_MODE", "hybrid")
 
   def start_detection(self) -> None:
     self._register_pipeline()
@@ -50,13 +53,20 @@ class Worker:
       group_id=self.group_id
     ):
       try:
+        current_file_time = self.last_model_version_time
+
+        if os.path.exists(self.ISOLATIONFOREST_MODEL_PATH):
+          current_file_time = max(current_file_time, os.path.getmtime(self.ISOLATIONFOREST_MODEL_PATH))
+
         if os.path.exists(self.RANDOMFOREST_MODEL_PATH):
-          current_file_time = os.path.getmtime(self.RANDOMFOREST_MODEL_PATH)
-            
-          if current_file_time > self.last_model_version_time:
-            logging.warning("New model detected, reloading...")
-            self._load_models()
+          current_file_time = max(current_file_time, os.path.getmtime(self.RANDOMFOREST_MODEL_PATH))
+
+        if current_file_time > self.last_model_version_time:
+          logging.warning("New model detected, reloading...")
+          if self._load_models():
             logging.warning("Reload complete")
+          else:
+            logging.error("Model reload failed — continuing with previous models.")
           
         logging.info(f"Stream received from Kafka! Processing payload ID: {event_json.get('id', 'Unknown')}")
         features = self.preprocessor.transform_json_to_features(event_json)
@@ -130,31 +140,41 @@ class Worker:
   
   def _load_models(self):
     """Loads all available models and preprocessor at startup."""
-    
+
     # --- Load Isolation Forest (Mandatory) ---
     try:
       logging.info("Loading Unsupervised Model (Isolation Forest)...")
-      self.preprocessor = DynamicPreprocessor(
+      preprocessor = DynamicPreprocessor(
         table_name=self.target_table,
         columns_to_ignore=self.columns_to_ignore
       )
-      self.model_if = joblib.load(self.ISOLATIONFOREST_MODEL_PATH)
+      model_if = joblib.load(self.ISOLATIONFOREST_MODEL_PATH)
+      self.preprocessor = preprocessor
+      self.model_if = model_if
     except FileNotFoundError:
       logging.error(f"Isolation Forest model not found at {self.ISOLATIONFOREST_MODEL_PATH}. Worker cannot start.")
       return False
-      
-    try:
-      if os.path.exists(self.RANDOMFOREST_MODEL_PATH):
-        logging.info("Loading Supervised Model (Random Forest)...")
-        self.model_rf = joblib.load(self.RANDOMFOREST_MODEL_PATH)
-      else:
-        logging.warning("Random Forest model not found. Running in Unsupervised-Only mode.")
-    except Exception as e:
-      logging.error(f"Failed to load Random Forest model, will proceed without it. Error: {e}")
+
+    if self.MODEL_MODE == "if_only":
+      logging.info("MODEL_MODE=if_only — skipping Random Forest load.")
       self.model_rf = None
-      
+    else:
+      try:
+        if os.path.exists(self.RANDOMFOREST_MODEL_PATH):
+          logging.info("Loading Supervised Model (Random Forest)...")
+          self.model_rf = joblib.load(self.RANDOMFOREST_MODEL_PATH)
+        else:
+          logging.warning("Random Forest model not found. Running in Unsupervised-Only mode.")
+      except Exception as e:
+        logging.error(f"Failed to load Random Forest model, will proceed without it. Error: {e}")
+        self.model_rf = None
+
+    # Track mtime of all model files for hot-reload detection
+    self.last_model_version_time = 0
+    if os.path.exists(self.ISOLATIONFOREST_MODEL_PATH):
+      self.last_model_version_time = max(self.last_model_version_time, os.path.getmtime(self.ISOLATIONFOREST_MODEL_PATH))
     if os.path.exists(self.RANDOMFOREST_MODEL_PATH):
-      self.last_model_version_time = os.path.getmtime(self.RANDOMFOREST_MODEL_PATH)
+      self.last_model_version_time = max(self.last_model_version_time, os.path.getmtime(self.RANDOMFOREST_MODEL_PATH))
 
     return True
         
@@ -170,22 +190,28 @@ class Worker:
         columns_to_ignore TEXT,
         date_columns TEXT,
         status VARCHAR(20) DEFAULT 'active',
+        model_mode VARCHAR(20) DEFAULT 'hybrid',
         last_startup TIMESTAMP
       );
     """)
 
+    add_model_mode_col = text("""
+      ALTER TABLE pipelines_config ADD COLUMN IF NOT EXISTS model_mode VARCHAR(20) DEFAULT 'hybrid';
+    """)
+
     cols_ignore_str = ",".join(self.columns_to_ignore) if self.columns_to_ignore else ""
     dates_str = ",".join(self.date_columns) if self.date_columns else ""
-      
+
     nome_bonito = f"Worker de {self.target_table.replace('_', ' ').title()}"
 
     upsert_query = text("""
-      INSERT INTO pipelines_config (target_table, pipeline_name, columns_to_ignore, date_columns, last_startup)
-      VALUES (:target, :name, :cols, :dates, CURRENT_TIMESTAMP)
+      INSERT INTO pipelines_config (target_table, pipeline_name, columns_to_ignore, date_columns, model_mode, last_startup)
+      VALUES (:target, :name, :cols, :dates, :mode, CURRENT_TIMESTAMP)
       ON CONFLICT (target_table)
-      DO UPDATE SET 
+      DO UPDATE SET
         columns_to_ignore = EXCLUDED.columns_to_ignore,
         date_columns = EXCLUDED.date_columns,
+        model_mode = EXCLUDED.model_mode,
         last_startup = EXCLUDED.last_startup,
         status = 'active';
     """)
@@ -193,13 +219,15 @@ class Worker:
     try:
       with engine.connect() as conn:
         conn.execute(create_table_query)
+        conn.execute(add_model_mode_col)
         conn.execute(upsert_query, {
           "target": self.target_table,
           "name": nome_bonito,
           "cols": cols_ignore_str,
-          "dates": dates_str
+          "dates": dates_str,
+          "mode": self.MODEL_MODE,
         })
         conn.commit()
-        logging.info(f"Pipeline {self.target_table} inserted in anomalies hub")
+        logging.info(f"Pipeline {self.target_table} inserted in anomalies hub (mode={self.MODEL_MODE})")
     except Exception as e:
       logging.error(f"Error registering the pipeline at anomalies Hub: {e}")

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Database, Eye, RotateCw } from 'lucide-react';
+import { Database, Eye, RotateCw, Cpu } from 'lucide-react';
 import { fraudService } from '../services/services';
 import type { Pipeline } from '../types/types';
 import { Button, Card, StatusBadge, PageHeader, SkeletonCard, ErrorBanner, useToast } from '../components/ui';
@@ -65,6 +65,14 @@ export default function WorkersPage() {
                   <Database className="h-4 w-4 text-gray-400" />
                   <span>{worker.target_table}</span>
                 </div>
+                {worker.model_mode && (
+                  <div className="flex items-center gap-2">
+                    <Cpu className="h-4 w-4 text-gray-400" />
+                    <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded">
+                      {worker.model_mode}
+                    </span>
+                  </div>
+                )}
                 {worker.last_startup && (
                   <p>Started: {new Date(worker.last_startup).toLocaleString()}</p>
                 )}

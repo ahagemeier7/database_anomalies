@@ -96,13 +96,13 @@ def get_dashboard_stats(engine: Engine):
   """)
   
   query_chart = text("""
-    SELECT 
+    SELECT
       DATE(timestamp_detection) as date,
       COUNT(CASE WHEN status = 'confirmed_fraud' THEN 1 END) as frauds,
       COUNT(CASE WHEN status = 'false_positive' THEN 1 END) as false_positives
     FROM anomalies_history
     GROUP BY DATE(timestamp_detection)
-    ORDER BY date ASC
+    ORDER BY date DESC
     LIMIT 7;
   """)
 
@@ -125,5 +125,5 @@ def get_dashboard_stats(engine: Engine):
     "model_metrics": {
       "precision": round(precision * 100, 1),
     },
-    "history_chart": [dict(row) for row in chart_data]
+    "history_chart": [dict(row) for row in reversed(chart_data)]
   }

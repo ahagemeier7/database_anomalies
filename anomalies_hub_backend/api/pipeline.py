@@ -44,7 +44,8 @@ def trigger_retraining(target_table: str, bg_tasks: BackgroundTasks, db: Engine 
     if not config:
       raise HTTPException(status_code=404, detail="Pipeline not found.")
 
-    cols_to_ignore = config['columns_to_ignore'].split(',') if config['columns_to_ignore'] else[]
+    cols_ignore_str = config['columns_to_ignore'] or ''
+    cols_to_ignore = [c for c in cols_ignore_str.split(',') if c]
 
     bg_tasks.add_task(retrain_hybrid_models, target_table, cols_to_ignore)
 
