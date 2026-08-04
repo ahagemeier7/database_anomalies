@@ -1,14 +1,24 @@
 import sys
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+import logging
+import traceback
+from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.engine import Engine
 
 from db.db import get_db_engine
-from schemas.schemas import RetrainResponse, PipelineListResponse
+from schemas.schemas import (
+    RetrainResponse,
+    PipelineListResponse,
+    PipelineConfigResponse,
+    InferenceModeUpdatePayload,
+    InferenceModeUpdateResponse,
+    ModelVersionListResponse,
+    ModelVersionItem,
+    ActivationResponse,
+)
 from crud import pipeline
 
-#Adding the /app suffix so that python finds the shared volume
 sys.path.append('/app')
-from training_pipeline.workers.worker_models_retraining import retrain_hybrid_models
+from src.training_pipeline.workers.worker_models_retraining import retrain_hybrid_models
 
 router = APIRouter()
 
@@ -29,28 +39,128 @@ def fetch_pipelines(db: Engine = Depends(get_db)):
   except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))
 
+@router.get(
+    "/pipelines/{target_table}",
+    tags=["Config"],
+    response_model=PipelineConfigResponse,
+    summary="Obter configuração da pipeline",
+    description="Retorna a configuração atual da pipeline, incluindo o modo de inferência selecionado.",
+)
+def get_pipeline_configuration(target_table: str, db: Engine = Depends(get_db)):
+  try:
+    config = pipeline.get_pipeline_config(db, target_table)
+    if not config:
+      raise HTTPException(status_code=404, detail="Pipeline not found.")
+    return {
+      "target_table": target_table,
+      "inference_mode": config.get("inference_mode") or "hybrid",
+    }
+  except HTTPException:
+    raise
+  except Exception as e:
+    raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/pipelines/{target_table}/inference-mode",
+    tags=["Config"],
+    response_model=InferenceModeUpdateResponse,
+    summary="Atualizar modo de inferência",
+    description="Persiste o modo de inferência selecionado para a pipeline alvo.",
+)
+def update_inference_mode(target_table: str, payload: InferenceModeUpdatePayload, db: Engine = Depends(get_db)):
+  try:
+    pipeline.update_pipeline_inference_mode(db, target_table, payload.inference_mode)
+    return {
+      "message": f"Inference mode updated for {target_table}.",
+      "inference_mode": payload.inference_mode,
+    }
+  except ValueError as ve:
+    raise HTTPException(status_code=400, detail=str(ve))
+  except Exception as e:
+    raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post(
     "/pipelines/{target_table}/retrain",
     tags=["Machine Learning"],
     response_model=RetrainResponse,
     summary="Disparar retreinamento de modelo",
-    description="Inicia o retreinamento assíncrono dos modelos híbridos "
-                "(Isolation Forest + Random Forest) para a tabela alvo informada. "
-                "A tarefa é executada em background.",
+    description="Executa o retreinamento dos modelos híbridos "
+                "(Isolation Forest + Random Forest) para a tabela alvo informada.",
 )
-def trigger_retraining(target_table: str, bg_tasks: BackgroundTasks, db: Engine = Depends(get_db)):
+def trigger_retraining(target_table: str, db: Engine = Depends(get_db)):
   try:
     config = pipeline.get_pipeline_config(db, target_table)
     if not config:
       raise HTTPException(status_code=404, detail="Pipeline not found.")
 
+<<<<<<< HEAD
     cols_ignore_str = config['columns_to_ignore'] or ''
     cols_to_ignore = [c for c in cols_ignore_str.split(',') if c]
+=======
+    cols_to_ignore = config['columns_to_ignore'].split(',') if config['columns_to_ignore'] else []
+>>>>>>> 22e66d4964e8f53f3e4eca9189753ebf25a8d9cc
 
-    bg_tasks.add_task(retrain_hybrid_models, target_table, cols_to_ignore)
+    # Executa o retreino de forma síncrona para capturar erros imediatamente
+    retrain_hybrid_models(target_table, cols_to_ignore)
 
-    return {"message": f"Retrain started for the table: {target_table}."}
+    return {"message": f"Retrain completed successfully for the table: {target_table}."}
   except HTTPException:
     raise
+  except Exception as e:
+    logging.error("Retrain failed for table '%s': %s\n%s", target_table, str(e), traceback.format_exc())
+    raise HTTPException(status_code=500, detail=f"Retrain failed: {str(e)}")
+
+
+@router.get(
+    "/pipelines/{target_table}/versions",
+    tags=["Machine Learning"],
+    response_model=ModelVersionListResponse,
+    summary="Listar versões de modelo",
+    description="Retorna todas as versões de modelo disponíveis para a pipeline alvo.",
+)
+def list_model_versions(target_table: str, db: Engine = Depends(get_db)):
+  try:
+    return {"versions": pipeline.get_model_versions(db, target_table)}
+  except Exception as e:
+    raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/pipelines/{target_table}/versions/active",
+    tags=["Machine Learning"],
+    response_model=ModelVersionItem,
+    summary="Versão ativa do modelo",
+    description="Retorna a versão atualmente ativa do modelo para a pipeline alvo.",
+)
+def get_active_model_version(target_table: str, db: Engine = Depends(get_db)):
+  try:
+    active = pipeline.get_active_model_version(db, target_table)
+    if not active:
+      raise HTTPException(status_code=404, detail="Active model version not found.")
+    return active
+  except HTTPException:
+    raise
+  except Exception as e:
+    raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/pipelines/{target_table}/versions/{version}/activate",
+    tags=["Machine Learning"],
+    response_model=ActivationResponse,
+    summary="Ativar versão de modelo",
+    description="Ativa a versão de modelo especificada e marca-a como ativa na pipeline.",
+)
+def activate_model_version(target_table: str, version: str, db: Engine = Depends(get_db)):
+  try:
+    pipeline.activate_model_version(db, target_table, version)
+    return {
+      "message": f"Model version {version} activated for {target_table}.",
+      "active_version": version,
+    }
+  except ValueError as ve:
+    raise HTTPException(status_code=404, detail=str(ve))
   except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))

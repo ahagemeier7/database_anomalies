@@ -4,6 +4,7 @@ export interface Pipeline {
   status: string;
   model_mode?: string;
   last_startup: string;
+  inference_mode?: string | null;
   // stats que vamos adicionar depois no backend:
   pending_count?: number;
 }
@@ -39,4 +40,16 @@ export interface TableStats {
   confirmed_frauds: number;
   false_positives: number;
   precision: number;
+}
+
+export interface ModelVersion {
+  target_table: string;
+  version: string;
+  translator_path: string;
+  if_model_path: string;
+  scaler_path: string;
+  rf_model_path?: string;
+  metrics?: Record<string, unknown>;
+  is_active: boolean;
+  created_at: string;
 }

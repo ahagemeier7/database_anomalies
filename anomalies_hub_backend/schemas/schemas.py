@@ -69,15 +69,57 @@ class TableStatsItem(BaseModel):
 class PipelineItem(BaseModel):
     target_table: str
     pipeline_name: str | None = None
+<<<<<<< HEAD
     status: str | None = None
     columns_to_ignore: str | None = None
     model_mode: str | None = None
+=======
+    columns_to_ignore: str | None = None
+    date_columns: str | None = None
+    inference_mode: str | None = None
+    status: str | None = None
+>>>>>>> 22e66d4964e8f53f3e4eca9189753ebf25a8d9cc
     last_startup: datetime | None = None
     pending_count: int = 0
 
 
 class PipelineListResponse(BaseModel):
     pipelines: list[PipelineItem]
+
+
+class PipelineConfigResponse(BaseModel):
+    target_table: str
+    inference_mode: str | None = None
+
+
+class InferenceModeUpdatePayload(BaseModel):
+    inference_mode: str = Field(..., description="Modo de inferência desejado: if, rf ou hybrid")
+
+
+class InferenceModeUpdateResponse(BaseModel):
+    message: str
+    inference_mode: str
+
+
+class ModelVersionItem(BaseModel):
+    target_table: str
+    version: str
+    translator_path: str
+    if_model_path: str
+    scaler_path: str
+    rf_model_path: str | None = None
+    metrics: dict[str, Any] | None = None
+    is_active: bool = False
+    created_at: datetime
+
+
+class ModelVersionListResponse(BaseModel):
+    versions: list[ModelVersionItem]
+
+
+class ActivationResponse(BaseModel):
+    message: str
+    active_version: str
 
 
 class RetrainResponse(BaseModel):

@@ -167,8 +167,7 @@ class AnomalyHandler:
           "source_topic": event_json.get('origin', {}).get('source_topic', 'unknown'),
           "ml_model": event_json.get('ml_model', 'N/A'),
           "status": event_json.get('status', 'unknown'),
-          #"raw_event": json.dumps(event_json.get('raw_event', {}))
-          "raw_event": event_json.get('raw_event', {})
+          "raw_event": json.dumps(event_json.get('raw_event', {}))
       }
 
       try:

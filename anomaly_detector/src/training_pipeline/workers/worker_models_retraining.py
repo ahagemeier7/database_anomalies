@@ -4,14 +4,24 @@ import logging
 import joblib
 import pandas as pd
 from dotenv import load_dotenv
+<<<<<<< HEAD
 from sqlalchemy import text
 from training_pipeline.db.db_internal import get_db_engine as get_db_engine_iternal
 from training_pipeline.db.db_source import get_db_engine as get_db_engine_source
+=======
+from src.training_pipeline.db.db_internal import get_db_engine as get_db_engine_iternal
+from src.training_pipeline.db.db_source import get_db_engine as get_db_engine_source
+from sqlalchemy import text
+from src.training_pipeline.workers.model_versioning import (
+    save_versioned_models,
+    insert_model_version_record,
+)
+>>>>>>> 22e66d4964e8f53f3e4eca9189753ebf25a8d9cc
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, precision_score, recall_score, f1_score
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -80,6 +90,8 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
     i_forest.fit(X)
 
     rf_trained = False
+    r_forest = None
+    rf_metrics = {}  # Will hold precision/recall/f1 if we can compute them
 
     if not df_history.empty and 1 in y.values:
       labeled_ids = df_history['original_id'].unique()
@@ -88,46 +100,98 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
       y_labeled = y[labeled_mask].values
 
       if 1 in y_labeled:
-        # Split into train/test to evaluate model performance
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_labeled, y_labeled, test_size=0.2, stratify=y_labeled, random_state=42
-        )
+        # Ensure we have enough samples for a stratified split
+        unique_classes = set(y_labeled)
+        min_samples_per_class = min((y_labeled == c).sum() for c in unique_classes)
 
-        r_forest = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-        r_forest.fit(X_train, y_train)
+        if min_samples_per_class >= 2:
+          # Enough samples — split, validate, then retrain on full set
+          X_train, X_test, y_train, y_test = train_test_split(
+              X_labeled, y_labeled, test_size=0.2, stratify=y_labeled, random_state=42
+          )
 
-        y_pred = r_forest.predict(X_test)
-        logging.info(
-            f"Random Forest validation (test set: {len(y_test)} samples):\n"
-            f"{classification_report(y_test, y_pred, zero_division=0)}"
-        )
+          r_forest = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+          r_forest.fit(X_train, y_train)
 
-        # Retrain on the full labeled set for the final saved model
-        r_forest.fit(X_labeled, y_labeled)
-        rf_trained = True
-        logging.info(f"Random Forest final model trained on {len(y_labeled)} labeled rows "
-                     f"({(y_labeled == 1).sum()} frauds, {(y_labeled == 0).sum()} false positives)")
+          y_pred = r_forest.predict(X_test)
+          logging.info(
+              f"Random Forest validation (test set: {len(y_test)} samples):\n"
+              f"{classification_report(y_test, y_pred, zero_division=0)}"
+          )
+
+          rf_metrics = {
+            "training_samples": int(len(y_labeled)),
+            "precision": float(precision_score(y_test, y_pred, zero_division=0)),
+            "recall": float(recall_score(y_test, y_pred, zero_division=0)),
+            "f1_score": float(f1_score(y_test, y_pred, zero_division=0)),
+          }
+
+          # Retrain on the full labeled set for the final saved model
+          r_forest.fit(X_labeled, y_labeled)
+          rf_trained = True
+          logging.info(f"Random Forest final model trained on {len(y_labeled)} labeled rows "
+                       f"({(y_labeled == 1).sum()} frauds, {(y_labeled == 0).sum()} false positives)")
+        else:
+          # Not enough samples for a split — train on all labeled data without validation
+          logging.warning(
+            f"Not enough labeled samples per class ({min_samples_per_class}) for train/test split. "
+            "Using all labeled data for training."
+          )
+          r_forest = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+          r_forest.fit(X_labeled, y_labeled)
+          rf_trained = True
+          rf_metrics = {
+            "training_samples": int(len(y_labeled)),
+          }
+          logging.info(f"Random Forest final model trained on {len(y_labeled)} labeled rows "
+                       f"({(y_labeled == 1).sum()} frauds, {(y_labeled == 0).sum()} false positives)")
       else:
         logging.warning('No confirmed fraud in labeled data, skipping random forest')
     else:
       logging.warning('No labeled data available, skipping random forest')
 
     models_dir = os.path.join(os.getcwd(), 'models')
-    os.makedirs(models_dir, exist_ok=True)
+    model_metadata = save_versioned_models(
+        target_table=target_table,
+        models_dir=models_dir,
+        translator=translator,
+        isolation_forest=i_forest,
+        scaler=scaler,
+        rf_model=r_forest if rf_trained else None,
+    )
 
-    translator_path = os.path.join(models_dir, f'{target_table}_translator.pkl')
-    if_model_path = os.path.join(models_dir, f'{target_table}_if_model.pkl')
-    rf_model_path = os.path.join(models_dir, f'{target_table}_rf_model.pkl')
-    scaler_path = os.path.join(models_dir, f'{target_table}_scaler.pkl')
+    metrics = {
+      "samples": int(len(df_source)),
+      "feature_count": int(df_features.shape[1]),
+      "rf_model_trained": rf_trained,
+      "labeled_data": int(len(df_history)) if not df_history.empty else 0,
+      "fraud_count": int((y == 1).sum()),
+    }
+    metrics.update(rf_metrics)
 
-    joblib.dump(translator, translator_path)
-    joblib.dump(i_forest, if_model_path)
-    joblib.dump(scaler, scaler_path)
-        
-    if rf_trained:
-      joblib.dump(r_forest, rf_model_path)
-    else:
-      logging.info(f"Isolation Forest saved in {models_dir}")
+    insert_model_version_record(
+      engine_internal,
+      target_table,
+      model_metadata["version"],
+      model_metadata["paths"],
+      metrics=metrics,
+      is_active=True,
+    )
+
+    # Automatically activate this new version in pipelines_config
+    version_tag = model_metadata["version"]
+    with engine_internal.connect() as conn:
+      conn.execute(
+        text("UPDATE model_versions SET is_active = false WHERE target_table = :target_table AND version != :version"),
+        {"target_table": target_table, "version": version_tag}
+      )
+      conn.execute(
+        text("UPDATE pipelines_config SET active_model_version = :version WHERE target_table = :target_table"),
+        {"target_table": target_table, "version": version_tag}
+      )
+      conn.commit()
+
+    logging.info("New model version %s activated for table '%s'.", version_tag, target_table)
 
     # Update pipeline registration with new timestamp
     try:

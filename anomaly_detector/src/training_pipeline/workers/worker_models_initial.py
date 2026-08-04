@@ -4,7 +4,10 @@ import joblib
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
+from sqlalchemy import text
+from src.training_pipeline.db.db_internal import get_db_engine as get_db_engine_internal
 from src.training_pipeline.db.db_source import get_db_engine
+from src.training_pipeline.workers.model_versioning import save_versioned_models, insert_model_version_record
 import pandas as pd
 
 
@@ -27,7 +30,12 @@ def train_models(target_table: str,columns_to_ignore:list = None) -> None:
     df_clean = df
 
   for col in df_clean.columns:
-    df_clean[col] = pd.to_numeric(df_clean[col], errors='ignore')
+    try:
+      df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
+    except ValueError:
+      df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
+
+  df_clean = df_clean.fillna(0)
 
   # Prevent Timestamp types from crashing DictVectorizer
   for col in df_clean.columns:
@@ -51,13 +59,43 @@ def train_models(target_table: str,columns_to_ignore:list = None) -> None:
   i_forest.fit(X_scaled)
 
   models_dir = os.path.join(os.getcwd(), 'models')
+  model_metadata = save_versioned_models(
+      target_table=target_table,
+      models_dir=models_dir,
+      translator=translator,
+      isolation_forest=i_forest,
+      scaler=scaler,
+  )
 
-  os.makedirs(models_dir, exist_ok=True)
+  metrics = {
+    "samples": int(len(df_clean)),
+    "feature_count": int(df_clean.shape[1]),
+    "rf_model_trained": False,
+    "labeled_data": 0,
+    "fraud_count": 0,
+  }
 
-  translator_path = os.path.join(models_dir, f'{target_table}_translator.pkl')
-  model_path = os.path.join(models_dir, f'{target_table}_if_model.pkl')
-  scaler_path = os.path.join(models_dir, f'{target_table}_scaler.pkl')
+  engine_internal = get_db_engine_internal()
+  insert_model_version_record(
+    engine_internal,
+    target_table,
+    model_metadata["version"],
+    model_metadata["paths"],
+    metrics=metrics,
+    is_active=True,
+  )
 
-  joblib.dump(translator, translator_path)
-  joblib.dump(i_forest, model_path)
-  joblib.dump(scaler, scaler_path)
+  # Automatically activate this new version in pipelines_config
+  version_tag = model_metadata["version"]
+  with engine_internal.connect() as conn:
+    conn.execute(
+      text("UPDATE model_versions SET is_active = false WHERE target_table = :target_table AND version != :version"),
+      {"target_table": target_table, "version": version_tag}
+    )
+    conn.execute(
+      text("UPDATE pipelines_config SET active_model_version = :version WHERE target_table = :target_table"),
+      {"target_table": target_table, "version": version_tag}
+    )
+    conn.commit()
+
+  logging.info("Initial model version %s activated for table '%s'.", version_tag, target_table)
