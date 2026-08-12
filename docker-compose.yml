@@ -99,7 +99,7 @@ services:
               "database.password": "postgres",
               "database.dbname": "db_real",
               "topic.prefix": "source-postgres",
-              "table.include.list": "public.insurance_claims",
+              "table.include.list": "public.creditcard_transactions",
               "key.converter": "org.apache.kafka.connect.json.JsonConverter",
               "value.converter": "org.apache.kafka.connect.json.JsonConverter",
               "key.converter.schemas.enable": "false",
@@ -122,7 +122,7 @@ services:
                 "database.password": "postgres",
                 "database.dbname": "db_real",
                 "topic.prefix": "source-postgres",
-                "table.include.list": "public.insurance_claims",
+                "table.include.list": "public.creditcard_transactions",
                 "key.converter": "org.apache.kafka.connect.json.JsonConverter",
                 "value.converter": "org.apache.kafka.connect.json.JsonConverter",
                 "key.converter.schemas.enable": "false",
@@ -148,19 +148,19 @@ services:
       - kafka-connect
 
 #--================Workers================--#
-  worker-insurance:
+  worker-worker_transactions:
     build: 
       context: ./anomaly_detector
       dockerfile: Dockerfile
-    container_name: worker_insurance
+    container_name: worker_transactions
     restart: on-failure
     environment:
-      - GROUP_ID=group_worker_insurance
+      - GROUP_ID=group_worker_transactions
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       
       #Changing the table name that the data will come
-      - TARGET_TABLE=insurance_claims
-      - COLUMNS_TO_IGNORE=id,FraudFound_P,PolicyNumber,RepNumber 
+      - TARGET_TABLE=creditcard_transactions
+      - COLUMNS_TO_IGNORE=id,Class,PolicyNumber,RepNumber 
       
       #Database connection variables
       #Source Database
@@ -254,10 +254,10 @@ services:
       - hub-backend
 
 #--================Seed (test only)================--#
-  seed-insurance:
+  seed_transactions:
     build:
       context: ./scripts/startup_datasets_seed
-    container_name: seed_insurance
+    container_name: seed_transactions
     restart: "no"
     environment:
       - POSTGRES_SOURCE_HOST=postgres-source
@@ -270,9 +270,9 @@ services:
       - POSTGRES_INTERNAL_USER=admin_fraude
       - POSTGRES_INTERNAL_PASSWORD=senha_segura
       - POSTGRES_INTERNAL_DB=db_seguranca
-      - TARGET_TABLE=insurance_claims
-      - FRAUD_COLUMN=FraudFound_P
-      - CSV_FILE=insurance_fraud.csv
+      - TARGET_TABLE=creditcard_transactions
+      - FRAUD_COLUMN=Class
+      - CSV_FILE=creditcard_small.csv
       - POLL_INTERVAL=3
       - POLL_TIMEOUT=600
     depends_on:

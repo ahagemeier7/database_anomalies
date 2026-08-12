@@ -6,6 +6,8 @@ import time
 from dotenv import load_dotenv
 from sqlalchemy import text
 from src.training_pipeline.db.db_source import get_db_engine as get_source_engine
+from src.training_pipeline.db.db_internal import get_db_engine as get_internal_engine
+from src.training_pipeline.workers.model_versioning import get_active_model_version
 from src.training_pipeline.workers.worker_models_initial import train_models
 from src.interference_pipeline.worker import Worker
 
@@ -81,6 +83,14 @@ if not os.path.exists(TRANSLATOR_PATH) or not os.path.exists(MODEL_PATH):
     logging.error(f"An error has occured while training the models: {e}")
     sys.exit(1)
 
+# Check the internal DB for an active model version and register it if missing.
+try:
+  internal_engine = get_internal_engine()
+  active_version = get_active_model_version(internal_engine, TARGET_TABLE)
+  if not active_version:
+    logging.warning("No active model version found in internal DB after training for '%s'.", TARGET_TABLE)
+except Exception as exc:
+  logging.warning("Could not verify active model version in internal DB: %s", exc)
 
 worker = Worker(
   target_table=TARGET_TABLE,

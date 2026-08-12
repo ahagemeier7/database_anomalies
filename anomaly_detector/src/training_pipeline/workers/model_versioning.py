@@ -41,7 +41,7 @@ def build_model_paths(target_table: str, models_dir: str, version: int) -> Dict[
 
 
 def ensure_model_versions_schema(engine: Engine):
-    create_table_query = text("""
+    create_model_versions_query = text("""
       CREATE TABLE IF NOT EXISTS model_versions (
         id SERIAL PRIMARY KEY,
         target_table VARCHAR(100) NOT NULL,
@@ -57,13 +57,27 @@ def ensure_model_versions_schema(engine: Engine):
       );
     """)
 
+    create_pipelines_config_query = text("""
+      CREATE TABLE IF NOT EXISTS pipelines_config (
+        target_table VARCHAR(100) PRIMARY KEY,
+        pipeline_name VARCHAR(100),
+        columns_to_ignore TEXT,
+        date_columns TEXT,
+        inference_mode VARCHAR(50) DEFAULT 'hybrid',
+        status VARCHAR(20) DEFAULT 'active',
+        last_startup TIMESTAMP,
+        active_model_version VARCHAR(50)
+      );
+    """)
+
     alter_table_query = text("""
       ALTER TABLE pipelines_config
       ADD COLUMN IF NOT EXISTS active_model_version VARCHAR(50);
     """)
 
     with engine.connect() as conn:
-        conn.execute(create_table_query)
+        conn.execute(create_model_versions_query)
+        conn.execute(create_pipelines_config_query)
         conn.execute(alter_table_query)
         conn.commit()
 
@@ -131,7 +145,7 @@ def insert_model_version_record(
         :if_model_path,
         :scaler_path,
         :rf_model_path,
-        :metrics::jsonb,
+        :metrics,
         :is_active
       )
       ON CONFLICT (target_table, version) DO UPDATE SET

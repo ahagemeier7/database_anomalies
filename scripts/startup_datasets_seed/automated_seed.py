@@ -52,9 +52,9 @@ def read_config() -> dict:
     return {
         "source": source,
         "internal": internal,
-        "target_table":   _env("TARGET_TABLE", "insurance_claims"),
+        "target_table":   _env("TARGET_TABLE", "creditcard_transactions"),
         "fraud_column":   _env("FRAUD_COLUMN", "FraudFound_P"),
-        "csv_file":       _env("CSV_FILE", "insurance_fraud.csv"),
+        "csv_file":       _env("CSV_FILE", "creditcard_small.csv"),
         "poll_interval":  int(_env("POLL_INTERVAL", "3")),
         "poll_timeout":   int(_env("POLL_TIMEOUT", "600")),
     }
