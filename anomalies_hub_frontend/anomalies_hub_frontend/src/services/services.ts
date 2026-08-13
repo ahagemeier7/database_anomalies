@@ -16,7 +16,7 @@ export const fraudService = {
     return response.data;
   },
 
-  getPipelineConfig: async (tableName: string): Promise<{ target_table: string; inference_mode: string | null }> => {
+  getPipelineConfig: async (tableName: string): Promise<{ target_table: string; inference_mode: string | null; active_model_version?: string | null; model_trained?: boolean }> => {
     const response = await api.get(`/pipelines/${tableName}`);
     return response.data;
   },

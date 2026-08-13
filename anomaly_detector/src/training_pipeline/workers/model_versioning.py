@@ -12,6 +12,8 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 import joblib
+import requests
+from urllib.parse import urljoin
 
 
 def get_next_model_version(target_table: str, models_dir: str) -> int:
@@ -170,6 +172,23 @@ def insert_model_version_record(
             "is_active": is_active,
         })
         conn.commit()
+
+    # Optionally notify the anomalies_hub_backend about the new model if API endpoint is available
+    try:
+        backend_url = os.getenv('ANOMALIES_HUB_BACKEND_URL')
+        if backend_url:
+            payload = {
+                'target_table': target_table,
+                'version': version,
+                'paths': paths,
+                'metrics': metrics,
+                'is_active': is_active,
+            }
+            register_url = urljoin(backend_url, '/api/models/register')
+            requests.post(register_url, json=payload, timeout=5)
+    except Exception:
+        # Do not fail the main flow if registration fails; just log
+        logging.info('Optional: failed to notify backend about new model version')
 
 
 def get_model_version(engine: Engine, target_table: str, version: str):

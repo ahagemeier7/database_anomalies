@@ -14,6 +14,8 @@ export default function ModelVersionsPage() {
   const [inferenceMode, setInferenceMode] = useState<'if' | 'rf' | 'hybrid'>('hybrid');
   const [modeSaving, setModeSaving] = useState(false);
   const [modeError, setModeError] = useState<string | null>(null);
+  const [modelTrained, setModelTrained] = useState<boolean>(false);
+  const [activeVersion, setActiveVersion] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchVersions = () => {
@@ -33,6 +35,8 @@ export default function ModelVersionsPage() {
     fraudService.getPipelineConfig(tableName)
       .then(data => {
         setInferenceMode((data.inference_mode as 'if' | 'rf' | 'hybrid') || 'hybrid');
+        setModelTrained(Boolean(data.model_trained || data.active_model_version));
+        setActiveVersion(data.active_model_version || null);
         setModeError(null);
       })
       .catch(() => setModeError('Could not load the current inference mode.'));
@@ -101,6 +105,12 @@ export default function ModelVersionsPage() {
               </div>
             </div>
             <div className="flex flex-col gap-2 sm:items-end">
+              <p className="text-sm text-slate-500">Model status: {modelTrained ? `Trained${activeVersion ? ` — ${activeVersion}` : ''}` : 'Not trained'}</p>
+              <div className="flex gap-2">
+                <Button size="sm" variant="ghost" onClick={() => { fetchVersions(); fetchPipelineConfig(); }}>
+                  Atualizar
+                </Button>
+              </div>
               <select
                 value={inferenceMode}
                 onChange={(event) => handleInferenceModeChange(event.target.value as 'if' | 'rf' | 'hybrid')}

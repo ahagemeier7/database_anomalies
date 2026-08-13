@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 from api.anomalies import router as anomalies_router
 from api.pipeline import router as pipeline_router
+from api.models import router as models_router
 
 
 load_dotenv()
@@ -22,6 +23,7 @@ app.add_middleware(
 
 app.include_router(anomalies_router, prefix="/api")
 app.include_router(pipeline_router, prefix="/api")
+app.include_router(models_router, prefix="/api")
 
 if __name__ == "__main__":
     import uvicorn

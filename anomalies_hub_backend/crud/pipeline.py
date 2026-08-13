@@ -47,9 +47,15 @@ def get_all_pipelines(engine: Engine):
       return pipelines
 
 def get_pipeline_config(engine: Engine, target_table: str):
-  query = text("SELECT columns_to_ignore, inference_mode FROM pipelines_config WHERE target_table = :target_table")
+  query = text("SELECT columns_to_ignore, inference_mode, active_model_version FROM pipelines_config WHERE target_table = :target_table")
   with engine.connect() as conn:
-    return conn.execute(query, {"target_table": target_table}).mappings().first()
+    row = conn.execute(query, {"target_table": target_table}).mappings().first()
+    if not row:
+      return None
+    # determine if a model is trained based on active_model_version presence
+    result = dict(row)
+    result['model_trained'] = bool(result.get('active_model_version'))
+    return result
 
 
 def update_pipeline_inference_mode(engine: Engine, target_table: str, inference_mode: str):
@@ -114,5 +120,10 @@ def activate_model_version(engine: Engine, target_table: str, version: str):
 
     conn.execute(
       text("UPDATE pipelines_config SET active_model_version = :version WHERE target_table = :target_table"),
+      {"target_table": target_table, "version": version}
+    )
+    # Optionally mark model_trained flag for convenience (not stored separately)
+    conn.execute(
+      text("INSERT INTO pipelines_config (target_table, inference_mode, active_model_version) VALUES (:target_table, COALESCE((SELECT inference_mode FROM pipelines_config WHERE target_table = :target_table), 'hybrid'), :version) ON CONFLICT (target_table) DO UPDATE SET active_model_version = EXCLUDED.active_model_version"),
       {"target_table": target_table, "version": version}
     )

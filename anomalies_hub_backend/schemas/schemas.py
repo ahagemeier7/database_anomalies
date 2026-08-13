@@ -84,6 +84,8 @@ class PipelineListResponse(BaseModel):
 class PipelineConfigResponse(BaseModel):
     target_table: str
     inference_mode: str | None = None
+    active_model_version: str | None = None
+    model_trained: bool = False
 
 
 class InferenceModeUpdatePayload(BaseModel):
