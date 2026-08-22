@@ -31,8 +31,31 @@ export default function RevisionsPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { setPage(0); }, [tableName]);
-  useEffect(() => { fetchAnomalies(); }, [page, tableName]);
+  useEffect(() => {
+    let active = true;
+
+    void Promise.resolve()
+      .then(() => {
+        if (active) {
+          setLoading(true);
+          setError(null);
+        }
+        return fraudService.getAnomalies('pending_revision', PAGE_SIZE, page * PAGE_SIZE, tableName);
+      })
+      .then(data => {
+        if (!active) return;
+        setAnomalies(data.anomalies);
+        setTotal(data.total);
+      })
+      .catch(() => {
+        if (active) setError('Failed to load anomalies. Is the backend running?');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [page, tableName]);
 
   const handleAction = async (alertId: string, status: 'confirmed_fraud' | 'false_positive') => {
     setActing(alertId);

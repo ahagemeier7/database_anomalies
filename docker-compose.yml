@@ -213,8 +213,10 @@ services:
       - POSTGRES_DB=db_seguranca 
       - POSTGRES_SERVER=postgres-internal:5432
     depends_on:
-      - kafka
-      - postgres-internal
+      kafka:
+        condition: service_healthy
+      postgres-internal:
+        condition: service_healthy
 
 #--===========Anomalies-web-hub===========--#
   hub-backend:

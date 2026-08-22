@@ -21,6 +21,7 @@ class Worker:
     self.date_columns = date_columns or []
     self.model_version = model_version
     self.inference_mode = self._normalize_inference_mode(inference_mode)
+    self.effective_inference_mode = self.inference_mode
     self.anomaly_producer = AnomalyProducer()
 
     self.preprocessor: DynamicPreprocessor = None
@@ -29,7 +30,6 @@ class Worker:
 
     self.last_active_version: Optional[str] = None
     self.last_model_files_mtime: dict[str, float] = {}
-    self.last_inference_mode = self.inference_mode
 
     self.base_models_dir = self._resolve_models_dir()
     self.ISOLATIONFOREST_MODEL_PATH = os.path.join(self.base_models_dir, f"{self.target_table}_if_model.pkl")
@@ -168,10 +168,10 @@ class Worker:
         score_if = None
         prob_rf = None
 
-        if self.inference_mode in {"if", "hybrid"} and self.model_if is not None:
+        if self.effective_inference_mode in {"if", "hybrid"} and self.model_if is not None:
           score_if = self.model_if.decision_function(features)[0]
 
-        if self.inference_mode in {"rf", "hybrid"} and self.model_rf is not None:
+        if self.effective_inference_mode in {"rf", "hybrid"} and self.model_rf is not None:
           prob_rf = self.model_rf.predict_proba(features)[0][1]
 
         is_anomaly = self._judge_prediction(score_if=score_if, prob_rf=prob_rf)
@@ -187,9 +187,9 @@ class Worker:
               dt = datetime.fromtimestamp(date_value / 1_000_000.0, tz=timezone.utc)
               event_json[col] = dt.strftime('%d/%m/%Y %H:%M:%S')
 
-          if self.inference_mode == "rf":
+          if self.effective_inference_mode == "rf":
             model_used = "RandomForest_v1"
-          elif self.inference_mode == "if":
+          elif self.effective_inference_mode == "if":
             model_used = "IsolationForest_v1"
           else:
             model_used = "Hybrid (RF+IF)"
@@ -216,10 +216,10 @@ class Worker:
 
   def _judge_prediction(self,score_if:float,prob_rf:float = None) -> bool:
     """Decide whether an event is anomalous using the selected inference mode."""
-    if self.inference_mode == "rf":
+    if self.effective_inference_mode == "rf":
       return prob_rf is not None and prob_rf > self.RF_HIGH_CONFIDENCE_THRESHOLD
 
-    if self.inference_mode == "if":
+    if self.effective_inference_mode == "if":
       return score_if is not None and score_if < self.IF_STANDALONE_THRESHOLD
 
     if prob_rf is not None:
@@ -237,6 +237,7 @@ class Worker:
     """Loads all available models and preprocessor at startup."""
 
     self._sync_inference_mode_from_db()
+    self.effective_inference_mode = self.inference_mode
 
     engine = get_db_engine()
     version_record = None
@@ -309,13 +310,13 @@ class Worker:
             "Random Forest model not found. Falling back to Isolation Forest mode for '%s'.",
             self.target_table,
           )
-          self.inference_mode = "if"
+          self.effective_inference_mode = "if"
       except Exception as e:
         logging.error(f"Failed to load Random Forest model. Error: {e}")
         if self.inference_mode == "rf":
           return False
         logging.warning("Falling back to Isolation Forest mode due to Random Forest load failure.")
-        self.inference_mode = "if"
+        self.effective_inference_mode = "if"
     else:
       logging.info("Skipping Random Forest load because the selected mode is '%s'.", self.inference_mode)
 

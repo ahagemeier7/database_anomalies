@@ -40,3 +40,6 @@ coverage.xml
 # Bancos de dados locais
 *.db
 *.sqlite3
+
+# Modelos treinados localmente
+anomaly_detector/src/models/

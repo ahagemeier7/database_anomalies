@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom';
 import { FileQuestion } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import WorkersPage from '../pages/WorkersPage';
@@ -6,6 +6,11 @@ import RevisionsPage from '../pages/RevisionsPage';
 import StatsPage from '../pages/StatsPage';
 import ModelVersionsPage from '../pages/ModelVersionsPage';
 import { EmptyState } from '../components/ui';
+
+function RevisionsRoute() {
+  const { tableName } = useParams();
+  return <RevisionsPage key={tableName ?? 'all'} />;
+}
 
 export default function AppRoutes() {
   return (
@@ -16,8 +21,8 @@ export default function AppRoutes() {
 
           <Route path="/" element={<WorkersPage />} />
 
-          <Route path="/revisions" element={<RevisionsPage />} />
-          <Route path="/revisions/:tableName" element={<RevisionsPage />} />
+          <Route path="/revisions" element={<RevisionsRoute />} />
+          <Route path="/revisions/:tableName" element={<RevisionsRoute />} />
           <Route path="/versions/:tableName" element={<ModelVersionsPage />} />
           <Route path="/stats" element={<StatsPage />} />
 

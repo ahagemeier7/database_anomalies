@@ -1,6 +1,7 @@
 import os
 import smtplib
 import logging
+import time
 from email.message import EmailMessage
 from sqlalchemy import text
 from ..consumer.consumer import anomaly_consumer_kafka
@@ -9,7 +10,7 @@ import json
 
 class AnomalyHandler:
   
-  def __init__(self,group_id:str):
+  def __init__(self,group_id:str, database_retry_attempts: int = 10, database_retry_seconds: float = 2.0):
     self.group_id = group_id
 
     self.sender_email = os.getenv("SENDER_EMAIL")
@@ -18,7 +19,7 @@ class AnomalyHandler:
 
     self.db_engine = get_db_engine()
 
-    self._create_history_table()
+    self._ensure_history_table(database_retry_attempts, database_retry_seconds)
 
 
   def handle_anomalies(self):
@@ -130,7 +131,17 @@ class AnomalyHandler:
 
       return msg
     
-  def _create_history_table(self):
+  def _ensure_history_table(self, attempts: int, retry_seconds: float) -> None:
+      for attempt in range(max(attempts, 1)):
+          if self._create_history_table():
+              return
+          if attempt < max(attempts, 1) - 1:
+              logging.warning("Waiting %.1f seconds before retrying anomalies_history creation.", retry_seconds)
+              time.sleep(retry_seconds)
+
+      raise RuntimeError("Could not create anomalies_history after database retries.")
+
+  def _create_history_table(self) -> bool:
       """Create the anomalies_history table"""
       query = text("""
           CREATE TABLE IF NOT EXISTS anomalies_history (
@@ -147,8 +158,10 @@ class AnomalyHandler:
           with self.db_engine.connect() as conn:
               conn.execute(query)
               conn.commit()
+          return True
       except Exception as e:
           logging.error(f"Failed to create anomalies_history table: {e}")
+          return False
 
   def _save_to_db(self, event_json):
       """Saving the json into postgres"""

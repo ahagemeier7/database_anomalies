@@ -43,8 +43,41 @@ export default function ModelVersionsPage() {
   };
 
   useEffect(() => {
-    fetchVersions();
-    fetchPipelineConfig();
+    if (!tableName) return;
+
+    let active = true;
+
+    void Promise.resolve()
+      .then(() => {
+        if (active) {
+          setLoading(true);
+          setError(null);
+        }
+        return fraudService.getModelVersions(tableName);
+      })
+      .then(data => {
+        if (active) setVersions(data);
+      })
+      .catch(() => {
+        if (active) setError('Failed to load model versions. Is the backend running?');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    void fraudService.getPipelineConfig(tableName)
+      .then(data => {
+        if (!active) return;
+        setInferenceMode((data.inference_mode as 'if' | 'rf' | 'hybrid') || 'hybrid');
+        setModelTrained(Boolean(data.model_trained || data.active_model_version));
+        setActiveVersion(data.active_model_version || null);
+        setModeError(null);
+      })
+      .catch(() => {
+        if (active) setModeError('Could not load the current inference mode.');
+      });
+
+    return () => { active = false; };
   }, [tableName]);
 
   const handleActivate = async (version: string) => {

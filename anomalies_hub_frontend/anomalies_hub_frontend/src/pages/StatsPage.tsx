@@ -99,7 +99,27 @@ export default function StatsPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchStats(); }, []);
+  useEffect(() => {
+    let active = true;
+
+    Promise.all([
+      fraudService.getStats(),
+      fraudService.getStatsByTable(),
+    ])
+      .then(([global, byTable]) => {
+        if (!active) return;
+        setStats(global);
+        setTableStats(byTable);
+      })
+      .catch(() => {
+        if (active) setError('Failed to load statistics. Is the backend running?');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => { active = false; };
+  }, []);
 
   const summaryCards = stats ? [
     { label: 'Total Alerts', value: stats.total_alerts, icon: Bell, color: 'text-indigo-600', bg: 'bg-indigo-50' },

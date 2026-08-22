@@ -22,7 +22,22 @@ export default function WorkersPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchPipelines(); }, []);
+  useEffect(() => {
+    let active = true;
+
+    fraudService.getPipelines()
+      .then(data => {
+        if (active) setWorkers(data);
+      })
+      .catch(() => {
+        if (active) setError('Failed to load pipelines. Is the backend running?');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => { active = false; };
+  }, []);
 
   const handleRetrain = async (tableName: string) => {
     setRetraining(tableName);
