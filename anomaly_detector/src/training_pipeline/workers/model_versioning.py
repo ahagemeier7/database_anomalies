@@ -4,7 +4,6 @@ import logging
 import os
 import re
 from typing import Dict, Optional
-from datetime import datetime
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
