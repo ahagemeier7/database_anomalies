@@ -93,12 +93,32 @@ def train_models(target_table: str,columns_to_ignore:list = None) -> None:
       {"target_table": target_table, "version": version_tag}
     )
     conn.execute(
-      text("UPDATE pipelines_config SET active_model_version = :version WHERE target_table = :target_table"),
-      {"target_table": target_table, "version": version_tag}
-    )
-    conn.execute(
-      text("UPDATE pipelines_config SET last_startup = CURRENT_TIMESTAMP, status = 'active' WHERE target_table = :table"),
-      {"table": target_table},
+      text("""
+        INSERT INTO pipelines_config (
+          target_table,
+          inference_mode,
+          active_model_version,
+          last_startup,
+          status
+        ) VALUES (
+          :target_table,
+          :inference_mode,
+          :version,
+          CURRENT_TIMESTAMP,
+          'active'
+        )
+        ON CONFLICT (target_table)
+        DO UPDATE SET
+          inference_mode = EXCLUDED.inference_mode,
+          active_model_version = EXCLUDED.active_model_version,
+          last_startup = EXCLUDED.last_startup,
+          status = EXCLUDED.status
+      """),
+      {
+        "target_table": target_table,
+        "inference_mode": "if",
+        "version": version_tag,
+      },
     )
     conn.commit()
 

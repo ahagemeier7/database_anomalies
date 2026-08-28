@@ -1,5 +1,17 @@
+import logging
+
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import SQLAlchemyError
+
+
+class DatabaseUnavailableError(RuntimeError):
+  """Raised when anomaly data cannot be read or written."""
+
+
+def _raise_database_unavailable(operation: str, error: Exception) -> None:
+  logging.exception("Database failure while %s", operation, exc_info=error)
+  raise DatabaseUnavailableError("Anomaly database is unavailable.") from error
 
 def get_anomalies_by_status(engine: Engine, status: str, limit: int = 50, offset: int = 0, origin_table: str | None = None):
   try:
@@ -20,8 +32,8 @@ def get_anomalies_by_status(engine: Engine, status: str, limit: int = 50, offset
     with engine.connect() as conn:
       result = conn.execute(query, params).mappings().all()
       return [dict(row) for row in result]
-  except Exception:
-    return []
+  except SQLAlchemyError as error:
+    _raise_database_unavailable("listing anomalies", error)
 
 
 def count_anomalies_by_status(engine: Engine, status: str, origin_table: str | None = None):
@@ -40,8 +52,8 @@ def count_anomalies_by_status(engine: Engine, status: str, origin_table: str | N
       params["origin_table"] = origin_table
     with engine.connect() as conn:
       return conn.execute(query, params).mappings().first()["total"]
-  except Exception:
-    return 0
+  except SQLAlchemyError as error:
+    _raise_database_unavailable("counting anomalies", error)
 
 
 def update_status(engine: Engine, alert_id: str, status: str):
@@ -50,8 +62,8 @@ def update_status(engine: Engine, alert_id: str, status: str):
     with engine.connect() as conn:
       conn.execute(query, {"status": status, "alert_id": alert_id})
       conn.commit()
-  except Exception:
-    return
+  except SQLAlchemyError as error:
+    _raise_database_unavailable("updating an anomaly status", error)
 
 
 def get_stats_by_table(engine: Engine):
@@ -91,8 +103,8 @@ def get_stats_by_table(engine: Engine):
       })
 
     return results
-  except Exception:
-    return []
+  except SQLAlchemyError as error:
+    _raise_database_unavailable("loading table statistics", error)
 
 
 def get_dashboard_stats(engine: Engine):
@@ -139,14 +151,5 @@ def get_dashboard_stats(engine: Engine):
       },
       "history_chart": [dict(row) for row in reversed(chart_data)]
     }
-  except Exception:
-    return {
-      "total_alerts": 0,
-      "pending_reviews": 0,
-      "confirmed_frauds": 0,
-      "false_positives": 0,
-      "model_metrics": {
-        "precision": 0.0,
-      },
-      "history_chart": []
-    }
+  except SQLAlchemyError as error:
+    _raise_database_unavailable("loading dashboard statistics", error)

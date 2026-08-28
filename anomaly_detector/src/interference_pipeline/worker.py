@@ -368,9 +368,10 @@ class Worker:
       VALUES (:target, :name, :cols, :dates, :mode, CURRENT_TIMESTAMP)
       ON CONFLICT (target_table)
       DO UPDATE SET
+        pipeline_name = EXCLUDED.pipeline_name,
         columns_to_ignore = EXCLUDED.columns_to_ignore,
         date_columns = EXCLUDED.date_columns,
-        inference_mode = EXCLUDED.inference_mode,
+        inference_mode = COALESCE(pipelines_config.inference_mode, EXCLUDED.inference_mode),
         last_startup = EXCLUDED.last_startup,
         status = 'active';
     """)

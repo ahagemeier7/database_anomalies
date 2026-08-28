@@ -16,6 +16,13 @@ router = APIRouter()
 def get_db():
   return get_db_engine()
 
+
+def _database_unavailable_error() -> HTTPException:
+  return HTTPException(
+    status_code=503,
+    detail="Database temporarily unavailable.",
+  )
+
 @router.get(
     "/anomalies",
     tags=["Anomalies"],
@@ -35,6 +42,8 @@ def fetch_anomalies(
     items = anomalies.get_anomalies_by_status(db, status, limit=limit, offset=offset, origin_table=origin_table)
     total = anomalies.count_anomalies_by_status(db, status, origin_table=origin_table)
     return {"anomalies": items, "total": total}
+  except anomalies.DatabaseUnavailableError:
+    raise _database_unavailable_error()
   except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))
 
@@ -54,6 +63,8 @@ def update_anomaly(alert_id: str, payload: StatusUpdatePayload, db: Engine = Dep
   try:
     anomalies.update_status(db, alert_id, payload.status)
     return {"message": f"Alert {alert_id} updated to '{payload.status}'!"}
+  except anomalies.DatabaseUnavailableError:
+    raise _database_unavailable_error()
   except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))
 
@@ -68,6 +79,8 @@ def update_anomaly(alert_id: str, payload: StatusUpdatePayload, db: Engine = Dep
 def fetch_dashboard_stats(db: Engine = Depends(get_db)):
   try:
     return anomalies.get_dashboard_stats(db)
+  except anomalies.DatabaseUnavailableError:
+    raise _database_unavailable_error()
   except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))
 
@@ -82,5 +95,7 @@ def fetch_dashboard_stats(db: Engine = Depends(get_db)):
 def fetch_stats_by_table(db: Engine = Depends(get_db)):
   try:
     return anomalies.get_stats_by_table(db)
+  except anomalies.DatabaseUnavailableError:
+    raise _database_unavailable_error()
   except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))

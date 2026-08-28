@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Copia os arquivos de dependência primeiro (otimiza o cache do Docker)
 COPY package.json package-lock.json* ./
-RUN npm install
+RUN npm ci
 
 # Copia o resto do código e faz o build (transforma TS/React em HTML/JS)
 COPY . .
