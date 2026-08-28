@@ -23,25 +23,26 @@ function HistoryChart({ data }: { data: { date: string; frauds: number; false_po
   const gap = 12;
   const groupWidth = barWidth * 2 + gap;
   const chartHeight = 200;
-  const chartWidth = Math.max(data.length * (groupWidth + 24) + 40, 200);
+  const chartWidth = Math.max(data.length * (groupWidth + 24) + 40, 560);
 
   return (
-    <svg width="100%" viewBox={`0 0 ${chartWidth} 260`} className="w-full">
-      {/* Y axis grid lines */}
-      {[0, 0.25, 0.5, 0.75, 1].map(ratio => {
-        const y = 40 + chartHeight * (1 - ratio);
-        return (
-          <g key={ratio}>
-            <line x1={50} y1={y} x2={chartWidth} y2={y} stroke="#f1f5f9" strokeDasharray={ratio === 0 ? 'none' : '4 3'} />
-            <text x={46} y={y + 4} textAnchor="end" fontSize={11} fill="#94a3b8">
-              {Math.round(maxVal * ratio)}
-            </text>
-          </g>
-        );
-      })}
+    <div className="overflow-x-auto">
+      <svg width="100%" height={260} viewBox={`0 0 ${chartWidth} 260`} className="w-full min-w-[560px]">
+        {/* Y axis grid lines */}
+        {[0, 0.25, 0.5, 0.75, 1].map(ratio => {
+          const y = 40 + chartHeight * (1 - ratio);
+          return (
+            <g key={ratio}>
+              <line x1={50} y1={y} x2={chartWidth} y2={y} stroke="#f1f5f9" strokeDasharray={ratio === 0 ? 'none' : '4 3'} />
+              <text x={46} y={y + 4} textAnchor="end" fontSize={11} fill="#94a3b8">
+                {Math.round(maxVal * ratio)}
+              </text>
+            </g>
+          );
+        })}
 
-      {/* Bars */}
-      {data.map((d, i) => {
+        {/* Bars */}
+        {data.map((d, i) => {
         const x = 60 + i * (groupWidth + 24);
         const fraudsH = (d.frauds / maxVal) * chartHeight;
         const falsePosH = (d.false_positives / maxVal) * chartHeight;
@@ -66,14 +67,15 @@ function HistoryChart({ data }: { data: { date: string; frauds: number; false_po
             </text>
           </g>
         );
-      })}
+        })}
 
-      {/* Legend */}
-      <rect x={chartWidth / 2 - 80} y={12} width={10} height={10} rx={2} fill="#6366f1" />
-      <text x={chartWidth / 2 - 66} y={21} fontSize={11} fill="#64748b">Frauds</text>
-      <rect x={chartWidth / 2} y={12} width={10} height={10} rx={2} fill="#f59e0b" />
-      <text x={chartWidth / 2 + 14} y={21} fontSize={11} fill="#64748b">False Positives</text>
-    </svg>
+        {/* Legend */}
+        <rect x={chartWidth / 2 - 80} y={12} width={10} height={10} rx={2} fill="#6366f1" />
+        <text x={chartWidth / 2 - 66} y={21} fontSize={11} fill="#64748b">Frauds</text>
+        <rect x={chartWidth / 2} y={12} width={10} height={10} rx={2} fill="#f59e0b" />
+        <text x={chartWidth / 2 + 14} y={21} fontSize={11} fill="#64748b">False Positives</text>
+      </svg>
+    </div>
   );
 }
 
