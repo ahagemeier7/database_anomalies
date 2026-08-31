@@ -125,7 +125,8 @@ Banco de dados origem (cdc) -> debezium -> Kafka -> anomaly detector -> kafka ->
 2. Confirme no Kafka Connect (`http://localhost:8083/connectors/source-postgres/status`) que o conector está em execução.
 3. Abra o Kafka UI (`http://localhost:8080`) para observar o tópico `source-postgres.public.creditcard_transactions` e, quando houver alerta, `detected_anomalies`.
 4. Abra o Hub (`http://localhost:3000`) e revise os alertas pendentes. Marque um como fraude confirmada ou falso positivo.
-5. Acione o retreinamento pelo Hub ou por `POST /api/pipelines/creditcard_transactions/retrain`; a nova versão registra suas métricas quando existem rótulos suficientes.
+5. Após registrar ao menos uma fraude confirmada e um falso positivo, acione o retreinamento pelo Hub ou por `POST /api/pipelines/creditcard_transactions/retrain`; a nova versão registra métricas supervisionadas.
+6. Para usar os dois modelos, selecione o modo `hybrid` no Hub depois do retreinamento. A API equivalente é `POST /api/pipelines/creditcard_transactions/inference-mode` com `{ "inference_mode": "hybrid" }`; a pipeline inicia em `if` enquanto não há modelo supervisionado válido.
 
 Este é um MVP acadêmico. As credenciais do Compose são locais, os resultados não representam validação para produção e cada alerta deve passar por revisão humana.
 

@@ -18,6 +18,11 @@ from sklearn.metrics import classification_report, precision_score, recall_score
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+
+def has_binary_review_labels(labels) -> bool:
+  return set(labels) == {0, 1}
+
+
 def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> None:
 
   contamination = float(os.getenv("CONTAMINATION", "0.01"))
@@ -91,7 +96,7 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
       X_labeled = X[labeled_mask]
       y_labeled = y[labeled_mask].values
 
-      if 1 in y_labeled:
+      if has_binary_review_labels(y_labeled):
         # Ensure we have enough samples for a stratified split
         unique_classes = set(y_labeled)
         min_samples_per_class = min((y_labeled == c).sum() for c in unique_classes)
@@ -138,7 +143,9 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
           logging.info(f"Random Forest final model trained on {len(y_labeled)} labeled rows "
                        f"({(y_labeled == 1).sum()} frauds, {(y_labeled == 0).sum()} false positives)")
       else:
-        logging.warning('No confirmed fraud in labeled data, skipping random forest')
+        logging.warning(
+          'Both confirmed fraud and false-positive labels are required; skipping random forest'
+        )
     else:
       logging.warning('No labeled data available, skipping random forest')
 

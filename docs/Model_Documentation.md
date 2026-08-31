@@ -27,13 +27,15 @@ Se não houver dados rotulados suficientes, apenas o `IsolationForest` permanece
 
 ### Inferência
 
-O modo padrão é `hybrid`:
+O modo `hybrid` combina os dois modelos:
 
 - Random Forest com probabilidade acima de `0.85`: gera alerta.
 - Random Forest acima de `0.40` e Isolation Forest abaixo de `-0.15`: gera alerta combinado.
 - Isolation Forest abaixo de `-0.10`: gera alerta mesmo sem confirmação do Random Forest.
 
 Os limites são configuráveis pelas variáveis `RF_HIGH_CONFIDENCE_THRESHOLD`, `RF_MODERATE_THRESHOLD`, `IF_COMBINED_THRESHOLD` e `IF_STANDALONE_THRESHOLD`. Eles são parâmetros de demonstração, não limites validados para produção.
+
+O treinamento inicial registra a pipeline no modo `if`. Após haver pelo menos uma fraude confirmada e um falso positivo, execute o retreinamento e selecione `hybrid` no Hub para usar os dois modelos. O modo `rf` só deve ser escolhido quando houver um Random Forest treinado.
 
 ## Versionamento e métricas
 

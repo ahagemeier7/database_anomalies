@@ -11,6 +11,7 @@ if str(DETECTOR_PATH) not in sys.path:
 
 from src.interference_pipeline.worker import Worker
 from src.training_pipeline.workers import worker_models_initial as initial_training
+from src.training_pipeline.workers import worker_models_retraining as retraining
 
 
 class RecordingConnection:
@@ -82,3 +83,8 @@ def test_worker_registration_keeps_mode_already_persisted_for_pipeline(monkeypat
 
     upsert_statement = engine.connection.executed[1][0]
     assert "inference_mode = COALESCE(pipelines_config.inference_mode, EXCLUDED.inference_mode)" in upsert_statement
+
+
+def test_retraining_requires_confirmed_fraud_and_false_positive():
+    assert retraining.has_binary_review_labels([1, 1]) is False
+    assert retraining.has_binary_review_labels([0, 1]) is True

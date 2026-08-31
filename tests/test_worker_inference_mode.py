@@ -89,3 +89,22 @@ def test_missing_rf_keeps_hybrid_configuration_and_uses_if_effectively(monkeypat
     assert worker.inference_mode == "hybrid"
     assert worker.effective_inference_mode == "if"
     assert worker._judge_prediction(score_if=-0.05, prob_rf=0.9) is False
+
+
+def test_one_class_random_forest_has_no_fraud_probability():
+    worker = Worker(
+        target_table="test_table",
+        group_id="group_test",
+        columns_to_ignore=["id"],
+        inference_mode="hybrid",
+    )
+
+    class OneClassRandomForest:
+        classes_ = [0]
+
+        def predict_proba(self, _features):
+            return [[1.0]]
+
+    worker.model_rf = OneClassRandomForest()
+
+    assert worker._get_fraud_probability([[0.0]]) is None

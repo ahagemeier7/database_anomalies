@@ -172,7 +172,7 @@ class Worker:
           score_if = self.model_if.decision_function(features)[0]
 
         if self.effective_inference_mode in {"rf", "hybrid"} and self.model_rf is not None:
-          prob_rf = self.model_rf.predict_proba(features)[0][1]
+          prob_rf = self._get_fraud_probability(features)
 
         is_anomaly = self._judge_prediction(score_if=score_if, prob_rf=prob_rf)
 
@@ -232,6 +232,16 @@ class Worker:
         return True
 
     return score_if is not None and score_if < self.IF_STANDALONE_THRESHOLD
+
+  def _get_fraud_probability(self, features) -> Optional[float]:
+    """Return the probability for the fraud class, when the model has one."""
+    classes = list(getattr(self.model_rf, "classes_", []))
+    if 1 not in classes:
+      logging.warning("Random Forest has no fraud class; ignoring its prediction.")
+      return None
+
+    probabilities = self.model_rf.predict_proba(features)[0]
+    return probabilities[classes.index(1)]
 
   def _load_models(self):
     """Loads all available models and preprocessor at startup."""
