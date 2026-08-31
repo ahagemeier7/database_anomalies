@@ -1,7 +1,8 @@
 # Hub de detecção de anomalias
-Projeto de estudo sobre detecção de anomalias com machine learning
+Projeto de estudo sobre detecção de anomalias com Machine Learning, streaming e processamento orientado a eventos.
 
 ## Descrição
+<<<<<<< HEAD
 Este projeto foi criado para estudar arquitetura de software, machine learning e engenharia de dados. Ele implementa uma pipeline de detecção de anomalias para tabelas de banco de dados, com foco em demonstração acadêmica e revisão humana dos alertas.
 O cenário padrão conta com 11 serviços em containers, sendo:
 - 2 deles para a aplicação web que contém um hub de detecção de anomalias
@@ -12,6 +13,18 @@ O cenário padrão conta com 11 serviços em containers, sendo:
 ## Dataset
 - [Credit Card Fraud Detection](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) (dataset ativo na demonstração)
   - Informações de transações feitas por cartões de crédito durante dois dias. Existem 492 fraudes e 284807 transações.
+=======
+Esse projeto foi criado para estudar arquitetura de software, Machine Learning e engenharia de dados. A pipeline captura alterações em uma tabela PostgreSQL, publica eventos no Kafka, aplica modelos de detecção e disponibiliza os alertas em um hub web para revisão.
+O Compose possui 11 serviços principais e um serviço opcional de seed, sendo:
+- 2 deles para a aplicação web que contém um hub de detecção de anomalias
+- 2 para a detecção e tratamento das anomalias encontradas
+- 2 para banco de dados em postgres (sendo um para a aplicação e outro simulando o banco de origem dos dados)
+  - 5 para streaming, replicação, monitoramento e configuração do ambiente
+
+## Dataset
+- [https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud] (Utilizado durante o desenvolvimento)
+  - O dataset original possui 284807 transações e 492 fraudes. A demonstração local usa o arquivo reduzido `creditcard_small.csv`, com 15492 registros, incluindo as 492 fraudes.
+>>>>>>> 51ac7d987670aa2e84b89c8e7be07652e5159fef
 
 - [Vehicle Claim Fraud Detection](https://www.kaggle.com/datasets/shivamb/vehicle-claim-fraud-detection)
   - Dataset experimental de seguros mantido nos scripts; não faz parte do fluxo padrão do Compose.
@@ -29,7 +42,8 @@ O cenário padrão conta com 11 serviços em containers, sendo:
   - Serviços de processamento
     - Anomaly Detector consome os eventos do Kafka, aplica o modelo de detecção e identifica anomalias
     - Anomaly Handler também consome do Kafka e faz o tratamento das anomalias geradas
-    - O detector envia as anomalias para a aplicação web / banco interno
+    - O detector publica as anomalias em um tópico Kafka
+    - O handler persiste os alertas no banco interno e pode enviar um aviso por email
 
   - Aplicação web
     - Frontend em React/Vite
@@ -52,7 +66,11 @@ O cenário padrão conta com 11 serviços em containers, sendo:
 - Kafka UI: v0.7.2
 - Python dependencies: ver `requirements.txt` de cada módulo
 
+<<<<<<< HEAD
 **Nota**: O projeto roda totalmente em containers; não é necessário iniciar backend ou frontend localmente se usar `docker compose up`.
+=======
+**Nota**: O projeto roda totalmente em containers; não é necessário iniciar backend ou frontend localmente quando o Compose é usado.
+>>>>>>> 51ac7d987670aa2e84b89c8e7be07652e5159fef
 
 ## Credenciais e Portas Padrão
 
@@ -67,10 +85,10 @@ O cenário padrão conta com 11 serviços em containers, sendo:
 | Zookeeper | localhost:2181 | Orquestrador Kafka |
 
 ### Email (Anomaly Handler)
-**⚠️ Configurar antes de usar o handler:**
-- `SENDER_EMAIL`: seu_email@gmail.com (seu Gmail)
-- `EMAIL_PASSWORD`: sua_senha_de_app (senha de app do Gmail)
-- `RECIEVER_EMAIL`: equipe_fraude@empresa.com (destinatário)
+O envio de email é opcional. Para habilitá-lo, configure as variáveis no `.env` usando uma senha de aplicativo, sem versionar credenciais:
+- `SENDER_EMAIL`: endereço configurado somente localmente
+- `EMAIL_PASSWORD`: senha de aplicativo configurada somente localmente
+- `RECIEVER_EMAIL`: destinatário configurado somente localmente
 
 ## Instalação e Execução
 
@@ -80,8 +98,7 @@ O `docker-compose.yml` contém a configuração de demonstração diretamente no
 
 ### Opção 1: Com Docker Compose (Recomendado)
 ```bash
-# Clonar o repositório
-git clone <seu-repositorio>
+# Depois de clonar o repositório, entre na pasta do projeto
 cd database_anomalies
 
 # Iniciar todos os serviços
@@ -96,7 +113,14 @@ docker compose down
 
 ### Opção 2: Com seed de dados
 ```bash
+<<<<<<< HEAD
 # Iniciar os serviços e o seed de dados
+=======
+# Copiar o template de ambiente
+cp .env.example .env
+
+# Iniciar os serviços e executar o seed de dados do dataset de cartão
+>>>>>>> 51ac7d987670aa2e84b89c8e7be07652e5159fef
 docker compose --profile seed up --build -d
 ```
 
@@ -106,11 +130,22 @@ docker compose --profile seed up --build -d
 - Kafka UI: `http://localhost:8080`
 - Kafka Connect: `http://localhost:8083`
 
+### Demonstração com dados
+
+O serviço `seed_transactions` é executado somente com o profile `seed`. Ele insere os registros normais, aguarda o treinamento inicial da pipeline `creditcard_transactions` e depois insere os registros fraudulentos:
+
+```bash
+docker compose up --build -d
+docker compose --profile seed up --build seed_transactions
+```
+
+Depois, consulte o dashboard em `http://localhost:3000` ou a API em `http://localhost:8000/api/anomalies`.
+
 ## Estrutura do projeto
 - anomalies_hub_backend - Backend da aplicação web, feito com python e FastAPI
 - anomalies_hub_frontend - Frontend da aplicação. Feito com React + Vite
 - anomaly_detector - Analisa os eventos do kafka para detectar anomalias. Python + Scikit-Learn
-- anomaly_handler - Trata as anomalias, enviando elas para o banco interno e um aviso por email
+- anomaly_handler - Trata as anomalias, persistindo-as no banco interno e podendo enviar um aviso por email
 - docs - Contém o diagrama da arquitetura e a configuração base para o conector source do kafka
 - scripts
   - model_testing - Validação das configurações dos modelos de ML, e testes de modelo híbrido
@@ -180,8 +215,8 @@ A documentação interativa da API (Swagger UI) está disponível em:
 |--------|------|-----------|
 | `GET` | `/api/anomalies` | Lista anomalias paginadas. Query params: `status` (default: `pending_revision`), `limit`, `offset`, `origin_table` |
 | `PUT` | `/api/anomalies/{alert_id}/status` | Atualiza o status de um alerta. Body: `{ "status": "confirmed_fraud" \| "false_positive" \| "pending_revision" }` |
-| `GET` | `/api/anomalies/stats` | Retorna contagens agregadas e gráfico de histórico (7 dias) para o dashboard |
-| `GET` | `/api/anomalies/stats/by-table` | Retorna estatísticas agrupadas por tabela de origem, com precisão por tabela |
+| `GET` | `/api/anomalies/stats` | Retorna contagens por status, gráfico dos últimos 7 dias e precision baseada nos alertas revisados |
+| `GET` | `/api/anomalies/stats/by-table` | Retorna contagens agrupadas por tabela e precision baseada nos alertas revisados |
 
 #### Pipelines
 
@@ -189,6 +224,23 @@ A documentação interativa da API (Swagger UI) está disponível em:
 |--------|------|-----------|
 | `GET` | `/api/pipelines` | Lista todas as pipelines de ML configuradas, com contagem de pendentes |
 | `POST` | `/api/pipelines/{target_table}/retrain` | Executa o retreinamento dos modelos para a tabela alvo |
+
+### Métricas exibidas no dashboard
+
+O dashboard exibe:
+
+- total de alertas;
+- alertas pendentes;
+- fraudes confirmadas;
+- falsos positivos;
+- histórico diário de fraudes confirmadas e falsos positivos;
+- precision global e por tabela.
+
+Os números de fraudes confirmadas e falsos positivos vêm do status atribuído durante a revisão dos alertas. A precision exibida é calculada assim:
+
+`fraudes confirmadas / (fraudes confirmadas + falsos positivos)`
+
+Essa é uma métrica operacional da revisão dos alertas, não uma avaliação completa do modelo. Recall, F1-score e matriz de confusão ainda precisam ser calculados em um conjunto de teste rotulado antes de serem divulgados como métricas de desempenho do Machine Learning.
 
 ## Troubleshooting
 
@@ -204,7 +256,11 @@ Encerre o processo que está usando a porta ou altere a porta no `docker-compose
 
 ### Modelo não treina
 - Verifique permissões da pasta `anomaly_detector/src/models` — precisa ser gravável
+<<<<<<< HEAD
 - Confira se os dados de seed estão disponíveis: `docker compose logs seed_transactions`
+=======
+- Confira se os dados de seed estão disponíveis: `docker compose --profile seed logs seed_transactions`
+>>>>>>> 51ac7d987670aa2e84b89c8e7be07652e5159fef
 - Se a tabela não existir no source-DB, a pipeline não encontrará dados para treinar
 
 ### Kafka não conecta
@@ -223,7 +279,7 @@ Aguarde ~30 segundos após `docker compose up` para o Kafka inicializar completa
 - O backend depende do `postgres-internal` — certifique-se de que ele está healthy
 
 ## Melhorias e sugestões
-- [ ] Cobertura de testes (pytest)
+- [x] Cobertura inicial de testes (pytest)
 - [ ] CI/CD com GitHub Actions
 - [ ] Logs estruturados em JSON
 - [ ] Health checks nos containers
