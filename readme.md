@@ -2,29 +2,16 @@
 Projeto de estudo sobre detecção de anomalias com Machine Learning, streaming e processamento orientado a eventos.
 
 ## Descrição
-<<<<<<< HEAD
-Este projeto foi criado para estudar arquitetura de software, machine learning e engenharia de dados. Ele implementa uma pipeline de detecção de anomalias para tabelas de banco de dados, com foco em demonstração acadêmica e revisão humana dos alertas.
-O cenário padrão conta com 11 serviços em containers, sendo:
-- 2 deles para a aplicação web que contém um hub de detecção de anomalias
-- 2 para a detecção e tratamento das anomalias encontradas
-- 2 para banco de dados em postgres (sendo um para a aplicação e outro simulando o banco de origem dos dados)
+Este projeto foi criado para estudar arquitetura de software, machine learning e engenharia de dados. A pipeline captura alterações em uma tabela PostgreSQL, publica eventos no Kafka, aplica modelos de detecção e disponibiliza os alertas em um hub web para revisão humana.
+O Compose possui 11 serviços principais e um serviço opcional de seed:
+- 2 para a aplicação web (Hub)
+- 2 para detecção e tratamento de anomalias
+- 2 bancos PostgreSQL (origem e interno)
 - 5 para CDC, streaming e observabilidade: Zookeeper, Kafka, Kafka Connect, configuração automática do conector e Kafka UI
 
 ## Dataset
 - [Credit Card Fraud Detection](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) (dataset ativo na demonstração)
-  - Informações de transações feitas por cartões de crédito durante dois dias. Existem 492 fraudes e 284807 transações.
-=======
-Esse projeto foi criado para estudar arquitetura de software, Machine Learning e engenharia de dados. A pipeline captura alterações em uma tabela PostgreSQL, publica eventos no Kafka, aplica modelos de detecção e disponibiliza os alertas em um hub web para revisão.
-O Compose possui 11 serviços principais e um serviço opcional de seed, sendo:
-- 2 deles para a aplicação web que contém um hub de detecção de anomalias
-- 2 para a detecção e tratamento das anomalias encontradas
-- 2 para banco de dados em postgres (sendo um para a aplicação e outro simulando o banco de origem dos dados)
-  - 5 para streaming, replicação, monitoramento e configuração do ambiente
-
-## Dataset
-- [https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud] (Utilizado durante o desenvolvimento)
   - O dataset original possui 284807 transações e 492 fraudes. A demonstração local usa o arquivo reduzido `creditcard_small.csv`, com 15492 registros, incluindo as 492 fraudes.
->>>>>>> 51ac7d987670aa2e84b89c8e7be07652e5159fef
 
 - [Vehicle Claim Fraud Detection](https://www.kaggle.com/datasets/shivamb/vehicle-claim-fraud-detection)
   - Dataset experimental de seguros mantido nos scripts; não faz parte do fluxo padrão do Compose.
@@ -66,11 +53,7 @@ O Compose possui 11 serviços principais e um serviço opcional de seed, sendo:
 - Kafka UI: v0.7.2
 - Python dependencies: ver `requirements.txt` de cada módulo
 
-<<<<<<< HEAD
-**Nota**: O projeto roda totalmente em containers; não é necessário iniciar backend ou frontend localmente se usar `docker compose up`.
-=======
 **Nota**: O projeto roda totalmente em containers; não é necessário iniciar backend ou frontend localmente quando o Compose é usado.
->>>>>>> 51ac7d987670aa2e84b89c8e7be07652e5159fef
 
 ## Credenciais e Portas Padrão
 
@@ -85,7 +68,7 @@ O Compose possui 11 serviços principais e um serviço opcional de seed, sendo:
 | Zookeeper | localhost:2181 | Orquestrador Kafka |
 
 ### Email (Anomaly Handler)
-O envio de email é opcional. Para habilitá-lo, configure as variáveis no `.env` usando uma senha de aplicativo, sem versionar credenciais:
+O envio de email é opcional. Nesta versão, configure diretamente no `docker-compose.yml` uma senha de aplicativo, sem versionar credenciais:
 - `SENDER_EMAIL`: endereço configurado somente localmente
 - `EMAIL_PASSWORD`: senha de aplicativo configurada somente localmente
 - `RECIEVER_EMAIL`: destinatário configurado somente localmente
@@ -113,14 +96,7 @@ docker compose down
 
 ### Opção 2: Com seed de dados
 ```bash
-<<<<<<< HEAD
-# Iniciar os serviços e o seed de dados
-=======
-# Copiar o template de ambiente
-cp .env.example .env
-
 # Iniciar os serviços e executar o seed de dados do dataset de cartão
->>>>>>> 51ac7d987670aa2e84b89c8e7be07652e5159fef
 docker compose --profile seed up --build -d
 ```
 
@@ -224,6 +200,7 @@ A documentação interativa da API (Swagger UI) está disponível em:
 |--------|------|-----------|
 | `GET` | `/api/pipelines` | Lista todas as pipelines de ML configuradas, com contagem de pendentes |
 | `POST` | `/api/pipelines/{target_table}/retrain` | Executa o retreinamento dos modelos para a tabela alvo |
+| `POST` | `/api/pipelines/{target_table}/inference-mode` | Atualiza o modo de inferência (`if`, `rf` ou `hybrid`) |
 
 ### Métricas exibidas no dashboard
 
@@ -256,11 +233,7 @@ Encerre o processo que está usando a porta ou altere a porta no `docker-compose
 
 ### Modelo não treina
 - Verifique permissões da pasta `anomaly_detector/src/models` — precisa ser gravável
-<<<<<<< HEAD
-- Confira se os dados de seed estão disponíveis: `docker compose logs seed_transactions`
-=======
 - Confira se os dados de seed estão disponíveis: `docker compose --profile seed logs seed_transactions`
->>>>>>> 51ac7d987670aa2e84b89c8e7be07652e5159fef
 - Se a tabela não existir no source-DB, a pipeline não encontrará dados para treinar
 
 ### Kafka não conecta
