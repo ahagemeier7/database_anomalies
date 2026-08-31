@@ -1,8 +1,8 @@
-confluent-kafka==2.3.0
-scikit-learn==1.3.2
-joblib==1.3.2
-dotenv
-sqlalchemy
-pandas
+confluent-kafka==2.13.2
+scikit-learn==1.8.0
+joblib==1.5.3
+python-dotenv==1.2.2
+SQLAlchemy==2.0.48
+pandas==3.0.2
 psycopg2-binary==2.9.9
-requests
+requests==2.34.2

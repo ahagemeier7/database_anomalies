@@ -1,4 +1,4 @@
-confluent-kafka==2.3.0
+confluent-kafka==2.13.2
 psycopg2-binary==2.9.9
-dotenv
-sqlalchemy
+python-dotenv==1.2.2
+SQLAlchemy==2.0.48

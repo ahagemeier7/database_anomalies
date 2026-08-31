@@ -2,19 +2,19 @@
 Projeto de estudo sobre detecção de anomalias com machine learning
 
 ## Descrição
-Esse projeto foi criado para entender conceitos de arquitetura de software, machine learning e engenharia de dados. Para isso, foi desenvolvido uma pipeline de detecção de anomalias para diferentes tabelas de banco de dados de maneira, simples, eficiente e de boa confiabilidade.
-O projeto conta com 10 containers trabalhando em conjunto, sendo:
+Este projeto foi criado para estudar arquitetura de software, machine learning e engenharia de dados. Ele implementa uma pipeline de detecção de anomalias para tabelas de banco de dados, com foco em demonstração acadêmica e revisão humana dos alertas.
+O cenário padrão conta com 11 serviços em containers, sendo:
 - 2 deles para a aplicação web que contém um hub de detecção de anomalias
 - 2 para a detecção e tratamento das anomalias encontradas
 - 2 para banco de dados em postgres (sendo um para a aplicação e outro simulando o banco de origem dos dados)
-- 4 para rodar os serviços de replicação do banco de origem para a aplicação
+- 5 para CDC, streaming e observabilidade: Zookeeper, Kafka, Kafka Connect, configuração automática do conector e Kafka UI
 
 ## Dataset
-- [https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud] (Utilizado durante o desenvolvimento)
+- [Credit Card Fraud Detection](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) (dataset ativo na demonstração)
   - Informações de transações feitas por cartões de crédito durante dois dias. Existem 492 fraudes e 284807 transações.
 
-- [https://www.kaggle.com/datasets/shivamb/vehicle-claim-fraud-detection]
-  - Informações de indenizações de seguros, contendo informações dos carros, do acidente e do condutor
+- [Vehicle Claim Fraud Detection](https://www.kaggle.com/datasets/shivamb/vehicle-claim-fraud-detection)
+  - Dataset experimental de seguros mantido nos scripts; não faz parte do fluxo padrão do Compose.
 
 ## Arquitetura do projeto
  - Fonte de dados
@@ -48,10 +48,11 @@ O projeto conta com 10 containers trabalhando em conjunto, sendo:
 - Kafka: 7.4.0
 - PostgreSQL: 15-alpine
 - Zookeeper: 7.4.0 (integrado com Kafka)
-- Debezium: latest
+- Debezium Connect: 3.2
+- Kafka UI: v0.7.2
 - Python dependencies: ver `requirements.txt` de cada módulo
 
-**Nota**: O projeto roda totalmente em containers; não é necessário iniciar backend ou frontend localmente se usar `docker-compose up`
+**Nota**: O projeto roda totalmente em containers; não é necessário iniciar backend ou frontend localmente se usar `docker compose up`.
 
 ## Credenciais e Portas Padrão
 
@@ -74,21 +75,14 @@ O projeto conta com 10 containers trabalhando em conjunto, sendo:
 ## Instalação e Execução
 
 ### Configuração do ambiente
-1. Copie o arquivo de exemplo:
-   ```bash
-   cp .env.example .env
-   ```
-2. Preencha as variáveis em `.env`.
-3. Não versionar o arquivo `.env`.
+
+O `docker-compose.yml` contém a configuração de demonstração diretamente no arquivo. O `.env.example` é uma referência dos valores do cenário de cartão e não é consumido pelo Compose nesta versão. Para evitar envio acidental de dados pessoais, não versione um `.env` local.
 
 ### Opção 1: Com Docker Compose (Recomendado)
 ```bash
 # Clonar o repositório
 git clone <seu-repositorio>
 cd database_anomalies
-
-# Copiar o template de ambiente
-cp .env.example .env
 
 # Iniciar todos os serviços
 docker compose up --build
@@ -102,9 +96,6 @@ docker compose down
 
 ### Opção 2: Com seed de dados
 ```bash
-# Copiar o template de ambiente
-cp .env.example .env
-
 # Iniciar os serviços e o seed de dados
 docker compose --profile seed up --build -d
 ```
@@ -128,40 +119,50 @@ docker compose --profile seed up --build -d
 ## Fluxo dos dados
 Banco de dados origem (cdc) -> debezium -> Kafka -> anomaly detector -> kafka -> anomaly handler -> Banco de dados interno (Postgres) -> anomalies hub backend -> anomalies hub frontend
 
+## Roteiro de demonstração
+
+1. Execute `docker compose --profile seed up --build -d`.
+2. Confirme no Kafka Connect (`http://localhost:8083/connectors/source-postgres/status`) que o conector está em execução.
+3. Abra o Kafka UI (`http://localhost:8080`) para observar o tópico `source-postgres.public.creditcard_transactions` e, quando houver alerta, `detected_anomalies`.
+4. Abra o Hub (`http://localhost:3000`) e revise os alertas pendentes. Marque um como fraude confirmada ou falso positivo.
+5. Acione o retreinamento pelo Hub ou por `POST /api/pipelines/creditcard_transactions/retrain`; a nova versão registra suas métricas quando existem rótulos suficientes.
+
+Este é um MVP acadêmico. As credenciais do Compose são locais, os resultados não representam validação para produção e cada alerta deve passar por revisão humana.
+
 ## Comandos úteis
 
 ### Docker
 ```bash
 # Ver logs de um serviço específico
-docker-compose logs -f hub-backend
-docker-compose logs -f worker-insurance
+docker compose logs -f hub-backend
+docker compose logs -f worker-worker_transactions
 
 # Listar containers e status
-docker-compose ps
+docker compose ps
 
 # Reiniciar um serviço
-docker-compose restart hub-backend
+docker compose restart hub-backend
 
 # Parar todos os serviços e remover volumes (limpeza total)
-docker-compose down -v
+docker compose down -v
 
 # Rebuildar uma imagem após mudanças
-docker-compose build hub-backend
+docker compose build hub-backend
 ```
 
 ### Desenvolvimento
 ```bash
 # Subir tudo em foreground (com logs)
-docker-compose up
+docker compose up
 
 # Subir tudo em background
-docker-compose up -d
+docker compose up -d
 
 # Subir apenas serviços específicos
-docker-compose up hub-backend hub-frontend
+docker compose up hub-backend hub-frontend
 
 # Rebuildar e subir (após alterações de código)
-docker-compose up --build
+docker compose up --build
 ```
 
 ## API Reference
@@ -186,7 +187,7 @@ A documentação interativa da API (Swagger UI) está disponível em:
 | Método | Path | Descrição |
 |--------|------|-----------|
 | `GET` | `/api/pipelines` | Lista todas as pipelines de ML configuradas, com contagem de pendentes |
-| `POST` | `/api/pipelines/{target_table}/retrain` | Dispara retreinamento assíncrono dos modelos para a tabela alvo |
+| `POST` | `/api/pipelines/{target_table}/retrain` | Executa o retreinamento dos modelos para a tabela alvo |
 
 ## Troubleshooting
 
@@ -202,21 +203,21 @@ Encerre o processo que está usando a porta ou altere a porta no `docker-compose
 
 ### Modelo não treina
 - Verifique permissões da pasta `anomaly_detector/src/models` — precisa ser gravável
-- Confira se os dados de seed estão disponíveis: `docker-compose logs seed-insurance`
+- Confira se os dados de seed estão disponíveis: `docker compose logs seed_transactions`
 - Se a tabela não existir no source-DB, a pipeline não encontrará dados para treinar
 
 ### Kafka não conecta
 ```bash
 # Verificar logs do Kafka
-docker-compose logs kafka
+docker compose logs kafka
 
 # Verificar se o Zookeeper está saudável
-docker-compose logs zookeeper
+docker compose logs zookeeper
 ```
-Aguarde ~30 segundos após `docker-compose up` para o Kafka inicializar completamente.
+Aguarde ~30 segundos após `docker compose up` para o Kafka inicializar completamente.
 
 ### Erro de conexão no backend
-- Confirme que o banco interno está rodando: `docker-compose logs postgres-internal`
+- Confirme que o banco interno está rodando: `docker compose logs postgres-internal`
 - Verifique as variáveis de ambiente no `docker-compose.yml` (seção `hub-backend`)
 - O backend depende do `postgres-internal` — certifique-se de que ele está healthy
 
