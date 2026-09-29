@@ -44,3 +44,6 @@ coverage.xml
 
 # Modelos treinados localmente
 anomaly_detector/src/models/
+
+# Relatórios e gráficos gerados localmente
+artifacts/

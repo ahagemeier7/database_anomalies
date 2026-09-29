@@ -13,9 +13,6 @@ O Compose possui 11 serviços principais e um serviço opcional de seed:
 - [Credit Card Fraud Detection](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) (dataset ativo na demonstração)
   - O dataset original possui 284807 transações e 492 fraudes. A demonstração local usa o arquivo reduzido `creditcard_small.csv`, com 15492 registros, incluindo as 492 fraudes.
 
-- [Vehicle Claim Fraud Detection](https://www.kaggle.com/datasets/shivamb/vehicle-claim-fraud-detection)
-  - Dataset experimental de seguros mantido nos scripts; não faz parte do fluxo padrão do Compose.
-
 ## Arquitetura do projeto
  - Fonte de dados
     - Um banco de dados de origem (Source DB)
@@ -39,7 +36,10 @@ O Compose possui 11 serviços principais e um serviço opcional de seed:
 
 ## Requisitos
 
+Para a comparação rápida dos modelos, basta Python 3.12+. Para executar a arquitetura completa, use Docker.
+
 ### Sistema
+- **Python**: versão 3.12+
 - **Docker**: versão 20.10+ 
 - **Docker Compose**: versão 2.0+
 - **RAM**: mínimo 4GB disponível (recomendado 8GB)
@@ -75,11 +75,57 @@ O envio de email é opcional. Nesta versão, configure diretamente no `docker-co
 
 ## Instalação e Execução
 
+O repositório possui duas formas complementares de execução:
+
+- **Comparação rápida:** avalia os modelos e gera gráficos localmente, sem iniciar a infraestrutura.
+- **Demonstração completa:** executa CDC, Kafka, Detector, Handler, bancos, API e frontend com Docker Compose.
+
+### Opção 1: comparação rápida dos modelos
+
+Crie um ambiente virtual e instale as dependências a partir da raiz do repositório:
+
+```bash
+python -m venv .venv
+
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+
+# Linux ou macOS
+source .venv/bin/activate
+
+python -m pip install -r requirements.txt
+```
+
+Execute o benchmark com o dataset incluído no projeto:
+
+```bash
+python scripts/model_testing/model_testing.py
+```
+
+O caminho do dataset é resolvido em relação ao próprio repositório, portanto não precisa ser alterado em outro computador. O comando compara Isolation Forest, Random Forest e o modelo híbrido usando conjuntos separados de treino, validação e teste. A validação é usada para escolher os thresholds e o conjunto de teste somente para as métricas finais.
+
+A tabela informa explicitamente `Anomalies Detected`, que representa todos os registros sinalizados pelo modelo (`TP + FP`), e `Frauds Caught`, que representa quantas fraudes reais foram corretamente identificadas (`TP`). Os contadores TP, FP, FN e TN também permanecem disponíveis para interpretar o resultado completo.
+
+Os resultados são exibidos no terminal e gravados em `artifacts/model_testing/`:
+
+- `metrics.csv`;
+- `metrics_comparison.png`;
+- `confusion_matrices.png`;
+- `evaluation_config.json`.
+
+Para avaliar outro CSV numérico e binário:
+
+```bash
+python scripts/model_testing/model_testing.py --dataset caminho/dataset.csv --target-column Class --ignore-columns Time
+```
+
+Essa comparação é um benchmark offline dos modelos. Ela não executa Kafka, CDC, Detector, Handler ou Hub.
+
 ### Configuração do ambiente
 
 O `docker-compose.yml` contém a configuração de demonstração diretamente no arquivo. O `.env.example` é uma referência dos valores do cenário de cartão e não é consumido pelo Compose nesta versão. Para evitar envio acidental de dados pessoais, não versione um `.env` local.
 
-### Opção 1: Com Docker Compose (Recomendado)
+### Opção 2: demonstração completa com Docker Compose
 ```bash
 # Depois de clonar o repositório, entre na pasta do projeto
 cd database_anomalies
@@ -94,9 +140,9 @@ docker compose logs -f
 docker compose down
 ```
 
-### Opção 2: Com seed de dados
+### Demonstração completa com seed de dados
 ```bash
-# Iniciar os serviços e executar o seed de dados do dataset de cartão
+# Iniciar todos os serviços e executar o seed automatizado do dataset de cartão
 docker compose --profile seed up --build -d
 ```
 
@@ -108,11 +154,10 @@ docker compose --profile seed up --build -d
 
 ### Demonstração com dados
 
-O serviço `seed_transactions` é executado somente com o profile `seed`. Ele insere os registros normais, aguarda o treinamento inicial da pipeline `creditcard_transactions` e depois insere os registros fraudulentos:
+O serviço `seed_transactions` é executado somente com o profile `seed`. Ele insere os registros normais, aguarda o treinamento inicial da pipeline `creditcard_transactions` e depois insere os registros fraudulentos. O fluxo completo pode ser iniciado com um único comando:
 
 ```bash
-docker compose up --build -d
-docker compose --profile seed up --build seed_transactions
+docker compose --profile seed up --build -d
 ```
 
 Depois, consulte o dashboard em `http://localhost:3000` ou a API em `http://localhost:8000/api/anomalies`.
@@ -124,8 +169,16 @@ Depois, consulte o dashboard em `http://localhost:3000` ou a API em `http://loca
 - anomaly_handler - Trata as anomalias, persistindo-as no banco interno e podendo enviar um aviso por email
 - docs - Contém o diagrama da arquitetura e a configuração base para o conector source do kafka
 - scripts
-  - model_testing - Validação das configurações dos modelos de ML, e testes de modelo híbrido
-  - startup_datasets_seed - Contém arquivos para o seed inicial com os dados do dataset
+  - model_testing - Benchmark offline e geração dos gráficos de comparação dos modelos
+  - startup_datasets_seed - Seed automatizado do dataset de cartão usado na demonstração completa
+
+### Compartilhamento entre Backend e Detector
+
+O Detector é o proprietário do treinamento, inferência e versionamento dos modelos. Para evitar duplicar essa lógica, o backend reutiliza diretamente os módulos de treinamento e versionamento localizados em `anomaly_detector/src`.
+
+No `docker-compose.yml`, o serviço `hub-backend` monta `./anomaly_detector/src` em `/app/src` e `./anomaly_detector/src/models` em `/app/models`. Com isso, os endpoints de retreinamento, consulta de versões e troca do modo de inferência chamam a mesma implementação usada pelo Detector e acessam os mesmos artefatos de modelo.
+
+Esse compartilhamento é intencional neste monorepo acadêmico: mantém uma única implementação das regras de Machine Learning, mas significa que o backend não deve ser executado isoladamente sem disponibilizar o código e os modelos do Detector. Uma futura separação em serviços independentes exigiria extrair esse código para um pacote Python compartilhado e versionado.
 
 ## Fluxo dos dados
 Banco de dados origem (cdc) -> debezium -> Kafka -> anomaly detector -> kafka -> anomaly handler -> Banco de dados interno (Postgres) -> anomalies hub backend -> anomalies hub frontend
@@ -217,7 +270,16 @@ Os números de fraudes confirmadas e falsos positivos vêm do status atribuído 
 
 `fraudes confirmadas / (fraudes confirmadas + falsos positivos)`
 
-Essa é uma métrica operacional da revisão dos alertas, não uma avaliação completa do modelo. Recall, F1-score e matriz de confusão ainda precisam ser calculados em um conjunto de teste rotulado antes de serem divulgados como métricas de desempenho do Machine Learning.
+Essa é uma métrica operacional da revisão dos alertas, não uma avaliação completa do modelo. O benchmark offline calcula precision, recall, F1-score e matrizes de confusão em um conjunto de teste rotulado e separado. Esses resultados continuam sendo experimentais e não representam desempenho em produção.
+
+## Testes automatizados
+
+Instale as dependências de desenvolvimento e execute a suíte a partir da raiz:
+
+```bash
+python -m pip install -r requirements-dev.txt
+pytest -q
+```
 
 ## Troubleshooting
 

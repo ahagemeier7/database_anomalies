@@ -6,7 +6,7 @@ Este documento organiza o que precisa ser feito antes de publicar o projeto de d
 
 Última verificação: 28/08/2026, após nova execução do ambiente.
 
-- **Testes automatizados:** concluído, 19 testes aprovados com `pytest` usando `.venv`.
+- **Testes automatizados:** concluído, 27 testes aprovados com `pytest -q`.
 - **Configuração Docker Compose:** concluído, `docker compose config` passou.
 - **Ambiente em execução:** concluído; todos os serviços principais subiram, com PostgreSQL e Kafka saudáveis.
 - **Interfaces HTTP:** concluído; frontend, Swagger, Kafka UI e Kafka Connect responderam com HTTP 200.
@@ -15,9 +15,8 @@ Este documento organiza o que precisa ser feito antes de publicar o projeto de d
 - **Validação dos alertas contra o CSV:** concluída offline; 104 dos 112 alertas eram fraudes reais e 8 eram falsos positivos.
 - **Métricas do experimento:** concluídas; a tela mostra 104 fraudes confirmadas, 8 falsos positivos e precision 92,9%. A validação offline também calculou recall 21,14% e F1-score 34,44%.
 - **Diagrama:** validado; o Detector acessa o banco interno para registrar a pipeline e as versões dos modelos, enquanto publica os alertas no tópico `detected_anomalies` para o Handler persistir em `anomalies_history`.
-- **Documentação de modelos:** pendente; `docs/Model_Documentation.md` ainda contém apenas tópicos.
+- **Documentação de modelos:** concluída em `docs/Model_Documentation.md`.
 - **Materiais para LinkedIn:** parcialmente concluídos; o screenshot do dashboard foi obtido, mas ainda faltam gráfico dedicado, vídeo e imagem de capa.
-- **Segundo dataset:** ainda não validado ponta a ponta e não deve ser priorizado antes da avaliação do fluxo principal.
 
 ### Próximo passo recomendado
 
@@ -47,7 +46,7 @@ Só publicar quando todos os itens abaixo estiverem concluídos:
 - [x] O projeto sobe seguindo um fluxo documentado. `docker compose up --build -d` subiu os serviços principais.
 - [x] Existe um caminho reproduzível para inserir dados e gerar uma anomalia. O seed inseriu os dados e gerou 112 alertas persistidos.
 - [x] O dashboard mostra alertas reais do fluxo: screenshot com 104 fraudes confirmadas, 8 falsos positivos e precision de 92,9%.
-- [x] Os testes automatizados passam: 19 testes aprovados.
+- [x] Os testes automatizados passam: 27 testes aprovados.
 - [x] Existem métricas calculadas para o experimento: precision 92,86%, recall 21,14% e F1-score 34,44%.
 - [x] Existem métricas exibidas no dashboard: 104 fraudes confirmadas, 8 falsos positivos e precision de 92,9%.
 - [ ] Não há senhas pessoais, tokens ou dados privados versionados. **Pendente:** há credenciais fictícias hardcoded no Compose; confirmar que nenhuma é real antes do push.
@@ -71,18 +70,13 @@ Atualizar o README para conter, nesta ordem:
 8. exemplo de teste ponta a ponta;
 9. métricas dos modelos;
 10. limitações e próximos passos;
-11. licença e fontes dos datasets.
+11. licença e fonte do dataset.
 
 Substituir instruções genéricas como `<seu-repositorio>` pelo endereço real do GitHub.
 
 ### 3.2 Corrigir consistência do texto
 
-Antes da publicação, verificar se todos os arquivos descrevem a mesma configuração. A documentação menciona `insurance_claims` em alguns lugares, enquanto o `docker-compose.yml` usa `creditcard_transactions`. Escolher uma estratégia:
-
-- documentar claramente os dois pipelines; ou
-- deixar um dataset como fluxo principal e marcar o outro como experimento.
-
-Também revisar referências antigas como `worker-insurance` e nomes de serviços que não existem mais. **Resultado atual:** o README foi alinhado ao worker `worker-worker_transactions`, ao profile `seed` e aos 11 serviços principais do Compose.
+Antes da publicação, verificar se todos os arquivos descrevem a mesma configuração. O único dataset mantido é `creditcard_small.csv`, executado pela pipeline `creditcard_transactions`. **Resultado atual:** o README foi alinhado ao worker `worker-worker_transactions`, ao profile `seed` e aos 11 serviços principais do Compose; os experimentos antigos foram removidos.
 
 ### 3.3 Revisar segurança
 
@@ -197,22 +191,7 @@ Não usar somente acurácia. Como as classes são desbalanceadas, precision, rec
 - [ ] Screenshot do tópico de anomalias.
 - [ ] Versão do modelo e data do treinamento. **Parcial:** `v001` foi registrado; falta reunir isso com as métricas.
 
-## 6. Fase 4: decidir se vale testar outro dataset
-
-Testar outro dataset é útil para demonstrar generalização, mas não deve atrasar a primeira publicação. Fazer o segundo experimento somente depois que o dataset principal estiver reproduzível.
-
-### Regra de decisão
-
-Publicar o segundo dataset como resultado principal apenas se:
-
-- o pipeline executar sem alterações manuais escondidas;
-- o modelo tiver métricas calculadas em conjunto de teste separado;
-- o fluxo de eventos chegar ao dashboard;
-- as diferenças entre os datasets estiverem documentadas.
-
-Caso contrário, apresentá-lo como trabalho futuro ou experimento parcial.
-
-### Verificação do fluxo do dataset principal
+## 6. Fase 4: verificar o fluxo do dataset principal
 
 O seed insere as linhas fraudulentas após o treinamento e a execução atual gerou 112 linhas em `anomalies_history`. A revisão pela API confirmou 104 fraudes e 8 falsos positivos. O Detector persiste metadados em `pipelines_config` e `model_versions`, e o Handler persiste os alertas em `anomalies_history`. As verificações realizadas foram:
 
@@ -362,7 +341,7 @@ O README deve levar o leitor até uma demonstração funcional rapidamente. A do
 - [ ] `docker compose config` passou.
 - [ ] O dashboard foi testado.
 - [ ] As métricas são reais e reproduzíveis.
-- [ ] Os datasets têm fonte e licença indicadas.
+- [ ] O dataset tem fonte e licença indicadas.
 - [ ] Senhas e dados pessoais foram removidos.
 - [ ] O diagrama corresponde ao código atual.
 - [ ] O vídeo não mostra terminais com credenciais.
@@ -377,10 +356,9 @@ O README deve levar o leitor até uma demonstração funcional rapidamente. A do
 4. Completar a documentação dos modelos.
 5. Criar screenshots, diagrama e vídeo.
 6. Atualizar o README com o caminho reproduzível.
-7. Testar o segundo dataset, se ainda houver tempo e se ele demonstrar uma capacidade nova.
-8. Publicar o primeiro post.
-9. Publicar os posts técnicos em intervalos de alguns dias.
-10. Atualizar o projeto conforme surgirem comentários e perguntas.
+7. Publicar o primeiro post.
+8. Publicar os posts técnicos em intervalos de alguns dias.
+9. Atualizar o projeto conforme surgirem comentários e perguntas.
 
 ## Resultado esperado
 
