@@ -1,6 +1,10 @@
 # Hub de detecção de anomalias
 Projeto de estudo sobre detecção de anomalias com Machine Learning, streaming e processamento orientado a eventos.
 
+![Hub exibindo 112 alertas pendentes gerados pela demonstração local](docs/dashboard-revisions.png)
+
+Hub após o seed de demonstração: 112 alertas aguardando revisão humana. A comparação dos modelos aparece na seção de avaliação offline.
+
 ## Descrição
 Este projeto foi criado para estudar arquitetura de software, machine learning e engenharia de dados. A pipeline captura alterações em uma tabela PostgreSQL, publica eventos no Kafka, aplica modelos de detecção e disponibiliza os alertas em um hub web para revisão humana.
 O Compose possui 11 serviços principais e um serviço opcional de seed:
@@ -12,8 +16,12 @@ O Compose possui 11 serviços principais e um serviço opcional de seed:
 ## Dataset
 - [Credit Card Fraud Detection](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) (dataset ativo na demonstração)
   - O dataset original possui 284807 transações e 492 fraudes. A demonstração local usa o arquivo reduzido `creditcard_small.csv`, com 15492 registros, incluindo as 492 fraudes.
+  - Fonte: Machine Learning Group da ULB e Worldline. A [página do dataset](https://www.kaggle.com/mlg-ulb/creditcardfraud/data) indica [Open Database License (ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/) para a base e [Database Contents License (DbCL) 1.0](https://opendatacommons.org/licenses/dbcl/1-0/) para seu conteúdo. O arquivo reduzido incluído neste repositório deriva dessa base e mantém essa atribuição.
 
 ## Arquitetura do projeto
+
+![Diagrama do fluxo entre PostgreSQL, Kafka, detector, handler e hub](docs/Diagrama%20arquitetura.png)
+
  - Fonte de dados
     - Um banco de dados de origem (Source DB)
     - O Debezium faz CDC (Change Data Capture) e publica os eventos de mudança no Kafka
@@ -68,10 +76,9 @@ Para a comparação rápida dos modelos, basta Python 3.12+. Para executar a arq
 | Zookeeper | localhost:2181 | Orquestrador Kafka |
 
 ### Email (Anomaly Handler)
-O envio de email é opcional. Nesta versão, configure diretamente no `docker-compose.yml` uma senha de aplicativo, sem versionar credenciais:
-- `SENDER_EMAIL`: endereço configurado somente localmente
-- `EMAIL_PASSWORD`: senha de aplicativo configurada somente localmente
-- `RECIEVER_EMAIL`: destinatário configurado somente localmente
+O Compose usa valores de demonstração para os bancos e e-mails fictícios. Não reutilize essas senhas fora do ambiente local. As portas publicadas pelo Compose ficam vinculadas a `127.0.0.1` no computador host.
+
+Para configurar e-mail real, crie um arquivo `.env` local (ignorado pelo Git) com `SENDER_EMAIL`, `EMAIL_PASSWORD` e `RECIEVER_EMAIL`. O Compose lê essas variáveis sem precisar editar o arquivo versionado. O envio de e-mail não é necessário para persistir e revisar os alertas.
 
 ## Instalação e Execução
 
@@ -106,6 +113,22 @@ O caminho do dataset é resolvido em relação ao próprio repositório, portant
 
 A tabela informa explicitamente `Anomalies Detected`, que representa todos os registros sinalizados pelo modelo (`TP + FP`), e `Frauds Caught`, que representa quantas fraudes reais foram corretamente identificadas (`TP`). Os contadores TP, FP, FN e TN também permanecem disponíveis para interpretar o resultado completo.
 
+#### Resultados reproduzidos no conjunto de teste
+
+Execução com `creditcard_small.csv` (15.492 registros, 492 fraudes), semente 42 e divisão estratificada em treino (9.294), validação (3.099) e teste (3.099). Os thresholds foram escolhidos na validação; os valores abaixo são do teste separado.
+
+| Modelo | Precision | Recall | F1-score | Alertas (TP + FP) | Fraudes detectadas (TP) | FP | FN |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Isolation Forest | 62,07% | 55,10% | 58,38% | 87 | 54 | 33 | 44 |
+| Random Forest | 94,51% | 87,76% | 91,01% | 91 | 86 | 5 | 12 |
+| Híbrido (IF + RF) | 95,56% | 87,76% | 91,49% | 90 | 86 | 4 | 12 |
+
+![Comparação de precision, recall e F1 dos modelos no teste offline](docs/model_testing/metrics_comparison.png)
+
+![Matrizes de confusão dos três modelos no teste offline](docs/model_testing/confusion_matrices.png)
+
+Esses números pertencem ao benchmark offline, não à execução ponta a ponta exibida no Hub. A amostra inclui todas as 492 fraudes do dataset original e, por isso, não representa a prevalência real de fraude. O resultado não estima desempenho em produção.
+
 Os resultados são exibidos no terminal e gravados em `artifacts/model_testing/`:
 
 - `metrics.csv`;
@@ -123,7 +146,7 @@ Essa comparação é um benchmark offline dos modelos. Ela não executa Kafka, C
 
 ### Configuração do ambiente
 
-O `docker-compose.yml` contém a configuração de demonstração diretamente no arquivo. O `.env.example` é uma referência dos valores do cenário de cartão e não é consumido pelo Compose nesta versão. Para evitar envio acidental de dados pessoais, não versione um `.env` local.
+O `docker-compose.yml` contém valores de demonstração para os bancos. O `.env.example` documenta as variáveis; se você criar um `.env` local, o Compose usa `SENDER_EMAIL`, `EMAIL_PASSWORD` e `RECIEVER_EMAIL` para o envio de alertas por e-mail. O arquivo `.env` é ignorado pelo Git e não deve ser versionado.
 
 ### Opção 2: demonstração completa com Docker Compose
 ```bash

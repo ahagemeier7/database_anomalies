@@ -2,6 +2,15 @@
 
 Este documento organiza o que precisa ser feito antes de publicar o projeto de detecção de anomalias no LinkedIn e no GitHub.
 
+## Atualização de 06/10/2026
+
+- O README passou a mostrar uma captura do Hub com 112 alertas pendentes, o diagrama e os gráficos da avaliação offline.
+- O benchmark `scripts/model_testing/model_testing.py` foi executado novamente: o modelo híbrido obteve precision de 95,56%, recall de 87,76% e F1-score de 91,49% no teste separado. Esses números não são os mesmos da revisão dos alertas no Hub.
+- A fonte e as licenças ODbL 1.0 e DbCL 1.0 do dataset distribuído foram identificadas no README.
+- A revisão dos arquivos versionados encontrou apenas credenciais de demonstração no Compose e no `.env.example`, sem tokens ou chaves privadas identificados. O Compose passou a publicar portas apenas em `127.0.0.1` e aceita credenciais de e-mail via `.env` local ignorado pelo Git.
+- `27` testes passaram e `docker compose config -q` passou. Uma nova execução local do seed produziu 112 alertas na API e no Hub.
+- O vídeo de demonstração continua opcional e ainda não foi capturado.
+
 ## Status da auditoria
 
 Última verificação: 28/08/2026, após nova execução do ambiente.
