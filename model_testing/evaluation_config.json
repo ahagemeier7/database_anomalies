@@ -1,0 +1,15 @@
+{
+  "random_state": 42,
+  "split_sizes": {
+    "train": 9294,
+    "validation": 3099,
+    "test": 3099
+  },
+  "thresholds": {
+    "rf": 0.28,
+    "rf_high": 0.4545442732550636,
+    "rf_moderate": 0.15000000000000002,
+    "if_combined": -0.001,
+    "if_standalone": -0.23420165080124078
+  }
+}
