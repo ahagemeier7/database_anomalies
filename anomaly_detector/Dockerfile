@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --upgrade pip
+RUN python -m pip install --no-cache-dir --upgrade pip==26.3
 
 # Copying the requirements
 COPY requirements.txt .
