@@ -5,21 +5,31 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 from sqlalchemy import text
+from src.training_pipeline.db.identifiers import quoted_table_name
+from src.training_pipeline.workers import model_versioning
 from src.training_pipeline.db.db_internal import get_db_engine as get_db_engine_internal
 from src.training_pipeline.db.db_source import get_db_engine
 from src.training_pipeline.workers.model_versioning import save_versioned_models, insert_model_version_record
 import pandas as pd
 
 
+def ensure_initial_models(target_table: str, columns_to_ignore: list = None) -> None:
+  quoted_table_name(target_table)
+  active = model_versioning.get_active_model_version(get_db_engine_internal(), target_table)
+  if not active or not all(active.get(key) and os.path.isfile(active[key]) for key in ('translator_path', 'if_model_path', 'scaler_path')):
+    train_models(target_table=target_table, columns_to_ignore=columns_to_ignore)
+
+
 def train_models(target_table: str,columns_to_ignore:list = None) -> None:
 
+  table_identifier = quoted_table_name(target_table)
   contamination = float(os.getenv("CONTAMINATION", "0.01"))
 
   #fetching DB data
   try:
     engine = get_db_engine()
 
-    df = pd.read_sql(f"SELECT * FROM {target_table}", engine)
+    df = pd.read_sql(text(f"SELECT * FROM {table_identifier}"), engine)
   except Exception as e:
     logging.error(f"Error connecting to the database: {e}")
     raise
@@ -48,9 +58,7 @@ def train_models(target_table: str,columns_to_ignore:list = None) -> None:
   translator = DictVectorizer(sparse=False)
   X_practice = translator.fit_transform(data_dict)
 
-  # Scale features — IsolationForest is sensitive to feature scale.
-  # Numeric columns (V1, V2, Amount) may have vastly different ranges,
-  # and without scaling, large-range features dominate the anomaly score.
+  # Persist the same transformation used by the inference preprocessor.
   scaler = StandardScaler()
   X_scaled = scaler.fit_transform(X_practice)
 

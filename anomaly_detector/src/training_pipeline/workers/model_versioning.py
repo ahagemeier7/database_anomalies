@@ -13,6 +13,7 @@ from sqlalchemy.engine import Engine
 import joblib
 import requests
 from urllib.parse import urljoin
+from src.training_pipeline.db.identifiers import quoted_table_name
 
 
 def get_next_model_version(target_table: str, models_dir: str) -> int:
@@ -91,6 +92,7 @@ def save_versioned_models(
     scaler: StandardScaler,
     rf_model: Optional[RandomForestClassifier] = None,
 ) -> Dict[str, Dict[str, str]]:
+    quoted_table_name(target_table)
     os.makedirs(models_dir, exist_ok=True)
     version = get_next_model_version(target_table, models_dir)
     paths = build_model_paths(target_table, models_dir, version)
@@ -107,6 +109,9 @@ def save_versioned_models(
     if rf_model is not None:
         joblib.dump(rf_model, paths["rf_model"])
         joblib.dump(rf_model, paths["latest_rf_model"])
+    else:
+        paths["rf_model"] = None
+        paths["latest_rf_model"] = None
 
     version_tag = paths["version"]
     logging.info(
@@ -159,7 +164,15 @@ def insert_model_version_record(
         created_at = CURRENT_TIMESTAMP;
     """)
 
-    with engine.connect() as conn:
+    with engine.begin() as conn:
+        # Serialize activation with mode changes for this pipeline. The model
+        # files are already saved; expose their metadata as one transaction.
+        if is_active:
+            conn.execute(
+                text("UPDATE pipelines_config SET active_model_version = :version, inference_mode = CASE WHEN inference_mode = 'rf' AND :has_rf = false THEN 'if' ELSE inference_mode END WHERE target_table = :target_table"),
+                {"target_table": target_table, "version": version, "has_rf": bool(paths.get('rf_model'))},
+            )
+            conn.execute(text("UPDATE model_versions SET is_active = false WHERE target_table = :target_table"), {"target_table": target_table})
         conn.execute(query, {
             "target_table": target_table,
             "version": version,
@@ -170,7 +183,6 @@ def insert_model_version_record(
             "metrics": json.dumps(metrics) if metrics is not None else None,
             "is_active": is_active,
         })
-        conn.commit()
 
     # Optionally notify the anomalies_hub_backend about the new model if API endpoint is available
     try:

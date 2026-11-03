@@ -43,7 +43,8 @@ export default function WorkersPage() {
     setRetraining(tableName);
     try {
       await fraudService.retrainPipeline(tableName);
-      toast(`Retraining started for ${tableName}`, 'success');
+      toast(`Retraining completed for ${tableName}`, 'success');
+      fetchPipelines();
     } catch {
       toast('Failed to start retraining.', 'error');
     } finally {

@@ -56,6 +56,7 @@ def get_pipeline_configuration(target_table: str, db: Engine = Depends(get_db)):
       "inference_mode": config.get("inference_mode") or "hybrid",
       "active_model_version": config.get("active_model_version"),
       "model_trained": bool(config.get("model_trained")),
+      "rf_available": bool(config.get("rf_available")),
     }
   except HTTPException:
     raise
@@ -77,6 +78,8 @@ def update_inference_mode(target_table: str, payload: InferenceModeUpdatePayload
       "message": f"Inference mode updated for {target_table}.",
       "inference_mode": payload.inference_mode,
     }
+  except LookupError as error:
+    raise HTTPException(status_code=404, detail=str(error))
   except ValueError as ve:
     raise HTTPException(status_code=400, detail=str(ve))
   except Exception as e:
@@ -158,7 +161,9 @@ def activate_model_version(target_table: str, version: str, db: Engine = Depends
       "message": f"Model version {version} activated for {target_table}.",
       "active_version": version,
     }
+  except LookupError as error:
+    raise HTTPException(status_code=404, detail=str(error))
   except ValueError as ve:
-    raise HTTPException(status_code=404, detail=str(ve))
+    raise HTTPException(status_code=400, detail=str(ve))
   except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))

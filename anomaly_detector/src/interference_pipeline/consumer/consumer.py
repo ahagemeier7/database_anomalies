@@ -12,6 +12,8 @@ def consumer_kafka_stream(topic: str,group_id: str):
     'bootstrap.servers' : bootstrap_servers,
     'group.id': group_id,
     'auto.offset.reset': 'earliest',
+    'enable.auto.commit': False,
+    'enable.auto.offset.store': False,
     'allow.auto.create.topics': True
   }
 
@@ -32,17 +34,12 @@ def consumer_kafka_stream(topic: str,group_id: str):
         if msg.error().code() in (KafkaError._PARTITION_EOF, KafkaError.UNKNOWN_TOPIC_OR_PART):
           continue 
         else:
-          logging.error(f"Kafka error: {msg.error()}")
-          break
+          raise RuntimeError(f"Kafka error: {msg.error()}")
     
       valor_byte = msg.value()
 
       if valor_byte:
-        try:
-          data = json.loads(valor_byte.decode('utf-8'))
-        except json.JSONDecodeError as exc:
-          logging.warning(f"Skipping invalid JSON message: {exc}")
-          continue
+        data = json.loads(valor_byte.decode('utf-8'))
 
         operation = data.get('op')
 
@@ -50,8 +47,12 @@ def consumer_kafka_stream(topic: str,group_id: str):
           new_registry = data.get('after')
           if isinstance(new_registry, dict):
             yield new_registry
+      # Resuming iteration means the caller completed processing. A failure
+      # or close while handling a record never reaches this acknowledgment.
+      consumer.commit(message=msg, asynchronous=False)
   except Exception as e:
-    logging.error(f"An unexpected error occured while listening to kafka stream: {e}")
+    logging.exception("Kafka consumption failed; leaving the record uncommitted")
+    raise
   except KeyboardInterrupt:
     logging.warning("Shutting down the pipeline by user request")
   finally:

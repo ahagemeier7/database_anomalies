@@ -1,8 +1,10 @@
 import os
+import math
 import logging
 import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import text
+from src.training_pipeline.db.identifiers import quoted_table_name
 from src.training_pipeline.db.db_internal import get_db_engine as get_db_engine_internal
 from src.training_pipeline.db.db_source import get_db_engine as get_db_engine_source
 from src.training_pipeline.workers.model_versioning import (
@@ -25,25 +27,26 @@ def has_binary_review_labels(labels) -> bool:
 
 def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> None:
 
+  table_identifier = quoted_table_name(target_table)
   contamination = float(os.getenv("CONTAMINATION", "0.01"))
 
   engine_source = get_db_engine_source()
   engine_internal = get_db_engine_internal()
 
   try:
-    df_source = pd.read_sql(f"SELECT * FROM {target_table}", engine_source)
+    df_source = pd.read_sql(text(f"SELECT * FROM {table_identifier}"), engine_source)
     df_source['is_fraud'] = 0
 
     logging.info("Buscando histórico de auditoria no banco interno...")
-    query_internal = f"""
+    query_internal = text("""
             SELECT 
                 raw_event->>'id' AS original_id, 
                 status 
             FROM anomalies_history 
-            WHERE origin_table = '{target_table}' 
+            WHERE origin_table = :target_table
             AND status IN ('confirmed_fraud', 'false_positive')
-        """
-    df_history = pd.read_sql(query_internal, engine_internal)
+        """)
+    df_history = pd.read_sql(query_internal, engine_internal, params={"target_table": target_table})
     
     if not df_history.empty:
       df_history['original_id'] = df_history['original_id'].astype(df_source['id'].dtype)
@@ -62,7 +65,8 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
     df_features = df_source.drop(columns=columns_to_drop, errors='ignore')
 
     for col in df_features.columns:
-      pd.to_numeric(df_features[col], errors='coerce')
+      df_features[col] = pd.to_numeric(df_features[col], errors='coerce')
+    df_features = df_features.fillna(0)
 
     # Convert dates to string to work with dict vectorizer
     for col in df_features.columns:
@@ -75,9 +79,8 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
 
     X = translator.fit_transform(data_dict)
 
-    # Scale features — IsolationForest is sensitive to feature scale.
-    # StandardScaler ensures all numeric features contribute equally
-    # to the anomaly score, preventing large-range columns from dominating.
+    # These transformations belong to the final saved models. Validation
+    # below fits a separate transformation using only its training rows.
     scaler = StandardScaler()
     X = scaler.fit_transform(X)
 
@@ -101,12 +104,18 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
         unique_classes = set(y_labeled)
         min_samples_per_class = min((y_labeled == c).sum() for c in unique_classes)
 
-        if min_samples_per_class >= 2:
+        test_count = math.ceil(len(y_labeled) * 0.2)
+        if min_samples_per_class >= 2 and test_count >= 2 and len(y_labeled) - test_count >= 2:
           # Enough samples — split, validate, then retrain on full set
           X_train, X_test, y_train, y_test = train_test_split(
-              X_labeled, y_labeled, test_size=0.2, stratify=y_labeled, random_state=42
+              df_features.loc[labeled_mask].to_dict(orient='records'), y_labeled,
+              test_size=0.2, stratify=y_labeled, random_state=42
           )
 
+          validation_translator = DictVectorizer(sparse=False)
+          validation_scaler = StandardScaler()
+          X_train = validation_scaler.fit_transform(validation_translator.fit_transform(X_train))
+          X_test = validation_scaler.transform(validation_translator.transform(X_test))
           r_forest = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
           r_forest.fit(X_train, y_train)
 
@@ -122,6 +131,8 @@ def retrain_hybrid_models(target_table: str, columns_to_ignore: list = None) -> 
             "recall": float(recall_score(y_test, y_pred, zero_division=0)),
             "f1_score": float(f1_score(y_test, y_pred, zero_division=0)),
           }
+          if not (has_binary_review_labels(y_train) and has_binary_review_labels(y_test)):
+            rf_metrics = {"training_samples": int(len(y_labeled))}
 
           # Retrain on the full labeled set for the final saved model
           r_forest.fit(X_labeled, y_labeled)

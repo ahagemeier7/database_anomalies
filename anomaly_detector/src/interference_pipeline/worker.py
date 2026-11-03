@@ -22,6 +22,7 @@ class Worker:
     self.model_version = model_version
     self.inference_mode = self._normalize_inference_mode(inference_mode)
     self.effective_inference_mode = self.inference_mode
+    self.loaded_inference_mode = None
     self.anomaly_producer = AnomalyProducer()
 
     self.preprocessor: DynamicPreprocessor = None
@@ -93,7 +94,7 @@ class Worker:
 
       if row and row.get("inference_mode"):
         normalized_mode = self._normalize_inference_mode(row["inference_mode"])
-        if normalized_mode != self.inference_mode:
+        if normalized_mode != self.inference_mode or normalized_mode != self.loaded_inference_mode:
           self.inference_mode = normalized_mode
           logging.info("Inference mode updated from DB to '%s'.", self.inference_mode)
           if reload_models and self.preprocessor is not None:
@@ -105,8 +106,6 @@ class Worker:
   def _check_active_version_changed(self) -> bool:
     """Check the DB to see if a different model version is now active.
     Only triggers after the initial load (when last_active_version is set)."""
-    if self.last_active_version is None:
-      return False
     try:
       engine = get_db_engine()
       active = get_active_model_version(engine, self.target_table)
@@ -143,7 +142,7 @@ class Worker:
     self._register_pipeline()
 
     if not self._load_models():
-      return
+      raise RuntimeError("No valid model is available; detection cannot start")
     KAFKA_TOPIC = f"source-postgres.public.{self.target_table}"
 
 
@@ -159,8 +158,8 @@ class Worker:
         # Check if active model version changed in DB (versioned mode)
         # or if any model file was updated on disk (legacy/latest mode)
         if self._check_active_version_changed() or self._check_model_files_changed():
-            self._load_models()
-            logging.warning("Reload complete")
+            if self._load_models():
+              logging.info("Model reload complete")
 
         logging.info(f"Stream received from Kafka! Processing payload ID: {event_json.get('id', 'Unknown')}")
         features = self.preprocessor.transform_json_to_features(event_json)
@@ -213,6 +212,7 @@ class Worker:
 
       except Exception as e:
         logging.error(f"An unexpected error occured while predicting the features: {e}")
+        raise
 
   def _judge_prediction(self,score_if:float,prob_rf:float = None) -> bool:
     """Decide whether an event is anomalous using the selected inference mode."""
@@ -244,111 +244,54 @@ class Worker:
     return probabilities[classes.index(1)]
 
   def _load_models(self):
-    """Loads all available models and preprocessor at startup."""
-
+    """Load a complete candidate before replacing any live model state."""
     self._sync_inference_mode_from_db()
-    self.effective_inference_mode = self.inference_mode
-
-    engine = get_db_engine()
-    version_record = None
-
-    if self.model_version:
-      logging.info(f"Looking for explicit model version '%s' in the internal DB...", self.model_version)
-      version_record = get_model_version(engine, self.target_table, self.model_version)
-
-    if not version_record:
-      logging.info("Looking for the active model version in the internal DB...")
-      version_record = get_active_model_version(engine, self.target_table)
-
-    if version_record:
-      logging.info(
-          "Found versioned model record for table '%s': %s",
-          self.target_table,
-          version_record["version"],
-      )
-      self.USE_VERSIONED_MODEL = True
-      self.TRANSLATOR_PATH = version_record["translator_path"]
-      self.ISOLATIONFOREST_MODEL_PATH = version_record["if_model_path"]
-      self.SCALER_PATH = version_record["scaler_path"]
-      self.RANDOMFOREST_MODEL_PATH = version_record.get("rf_model_path") or ""
-    else:
-      logging.warning(
-          "No versioned model record found for '%s'. Falling back to legacy model paths.",
-          self.target_table,
-      )
-
-    logging.info("Selected inference mode: %s", self.inference_mode)
-
+    mode = self.inference_mode
     try:
-      self.preprocessor = DynamicPreprocessor(
-        table_name=self.target_table,
-        columns_to_ignore=self.columns_to_ignore,
-        translator_path=self.TRANSLATOR_PATH,
-        scaler_path=self.SCALER_PATH,
+      engine = get_db_engine()
+      record = get_model_version(engine, self.target_table, self.model_version) if self.model_version else None
+      if self.model_version and not record:
+        raise ValueError("Requested model version does not exist")
+      record = record or get_active_model_version(engine, self.target_table)
+      paths = {
+        "translator": record["translator_path"] if record else self.TRANSLATOR_PATH,
+        "if": record["if_model_path"] if record else self.ISOLATIONFOREST_MODEL_PATH,
+        "scaler": record["scaler_path"] if record else self.SCALER_PATH,
+        "rf": (record.get("rf_model_path") or "") if record else self.RANDOMFOREST_MODEL_PATH,
+      }
+      preprocessor = DynamicPreprocessor(
+        table_name=self.target_table, columns_to_ignore=self.columns_to_ignore,
+        translator_path=paths["translator"], scaler_path=paths["scaler"],
       )
-    except FileNotFoundError as exc:
-      logging.error("Failed to initialize preprocessor for '%s': %s", self.target_table, exc)
+      model_if = joblib.load(paths["if"]) if mode in {"if", "hybrid"} else None
+      model_rf = None
+      effective_mode = mode
+      if mode in {"rf", "hybrid"}:
+        try:
+          if not paths["rf"] or not os.path.isfile(paths["rf"]):
+            raise FileNotFoundError("Random Forest is unavailable")
+          model_rf = joblib.load(paths["rf"])
+          if 1 not in getattr(model_rf, "classes_", []):
+            raise ValueError("Random Forest has no fraud class")
+        except Exception:
+          if mode == "rf":
+            raise
+          logging.warning("Random Forest unavailable; using Isolation Forest for this version")
+          model_rf = None
+          effective_mode = "if"
+      mtimes = {path: os.path.getmtime(path) for path in paths.values() if path and os.path.isfile(path)}
+    except Exception:
+      logging.exception("Model loading failed; preserving the previous working model set")
       return False
-    except Exception as exc:
-      logging.error("Failed to initialize preprocessor for '%s': %s", self.target_table, exc)
-      return False
 
-    if self.inference_mode in {"if", "hybrid"}:
-      try:
-        logging.info("Loading Unsupervised Model (Isolation Forest) from %s...", self.ISOLATIONFOREST_MODEL_PATH)
-        self.model_if = joblib.load(self.ISOLATIONFOREST_MODEL_PATH)
-      except FileNotFoundError:
-        logging.error(f"Isolation Forest model not found at {self.ISOLATIONFOREST_MODEL_PATH}. Worker cannot start.")
-        return False
-      except Exception as e:
-        logging.error(f"Failed to load Isolation Forest model: {e}")
-        return False
-    else:
-      logging.info("Skipping Isolation Forest load because the selected mode is '%s'.", self.inference_mode)
-
-    if self.inference_mode in {"rf", "hybrid"}:
-      try:
-        if self.RANDOMFOREST_MODEL_PATH and os.path.exists(self.RANDOMFOREST_MODEL_PATH):
-          logging.info("Loading Supervised Model (Random Forest) from %s...", self.RANDOMFOREST_MODEL_PATH)
-          self.model_rf = joblib.load(self.RANDOMFOREST_MODEL_PATH)
-        else:
-          if self.inference_mode == "rf":
-            logging.warning("Random Forest model not found. Cannot start in '%s' mode.", self.inference_mode)
-            return False
-
-          logging.warning(
-            "Random Forest model not found. Falling back to Isolation Forest mode for '%s'.",
-            self.target_table,
-          )
-          self.effective_inference_mode = "if"
-      except Exception as e:
-        logging.error(f"Failed to load Random Forest model. Error: {e}")
-        if self.inference_mode == "rf":
-          return False
-        logging.warning("Falling back to Isolation Forest mode due to Random Forest load failure.")
-        self.effective_inference_mode = "if"
-    else:
-      logging.info("Skipping Random Forest load because the selected mode is '%s'.", self.inference_mode)
-
-    # Record the active version so we can detect future changes
-    if version_record:
-        self.last_active_version = version_record["version"]
-    else:
-        self.last_active_version = None
-
-    # Record current mtime for all loaded model files to detect future changes
-    model_paths_to_track = [
-        self.ISOLATIONFOREST_MODEL_PATH,
-        self.TRANSLATOR_PATH,
-        self.SCALER_PATH,
-    ]
-    if self.RANDOMFOREST_MODEL_PATH:
-        model_paths_to_track.append(self.RANDOMFOREST_MODEL_PATH)
-
-    for path in model_paths_to_track:
-        if os.path.exists(path):
-            self.last_model_files_mtime[path] = os.path.getmtime(path)
-
+    self.preprocessor, self.model_if, self.model_rf = preprocessor, model_if, model_rf
+    self.effective_inference_mode = effective_mode
+    self.loaded_inference_mode = mode
+    self.TRANSLATOR_PATH, self.ISOLATIONFOREST_MODEL_PATH = paths["translator"], paths["if"]
+    self.SCALER_PATH, self.RANDOMFOREST_MODEL_PATH = paths["scaler"], paths["rf"]
+    self.USE_VERSIONED_MODEL = record is not None
+    self.last_active_version = record["version"] if record else None
+    self.last_model_files_mtime = mtimes
     return True
 
   def _register_pipeline(self):

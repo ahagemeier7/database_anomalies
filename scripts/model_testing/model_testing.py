@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from dataclasses import dataclass
@@ -19,7 +20,7 @@ import pandas as pd
 import seaborn as sns
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
 from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.preprocessing import StandardScaler
 
 
@@ -40,6 +41,9 @@ class EvaluationReport:
     thresholds: dict[str, float]
     split_sizes: dict[str, int]
     random_state: int
+    split_indices: dict[str, np.ndarray]
+    duplicate_feature_rows: int
+    dataset_fingerprint: str
 
 
 def repository_root() -> Path:
@@ -202,6 +206,19 @@ def _metrics_table(
     return pd.DataFrame(rows)
 
 
+def split_dataset(features: pd.DataFrame, target: pd.Series, random_state: int = 42) -> dict[str, np.ndarray]:
+    """Approximate 60/20/20 stratification without sharing feature vectors."""
+    groups = pd.util.hash_pandas_object(features, index=False).to_numpy()
+    outer = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=random_state)
+    train_full, test = next(outer.split(features, target, groups))
+    inner = StratifiedGroupKFold(n_splits=4, shuffle=True, random_state=random_state)
+    train, validation = next(inner.split(features.iloc[train_full], target.iloc[train_full], groups[train_full]))
+    splits = {'train': train_full[train], 'validation': train_full[validation], 'test': test}
+    if any(set(target.iloc[indices]) != {0, 1} for indices in splits.values()):
+        raise ValueError('São necessários mais grupos distintos de ambas as classes para separar treino, validação e teste.')
+    return splits
+
+
 def evaluate_models(
     features: pd.DataFrame,
     target: pd.Series,
@@ -209,20 +226,9 @@ def evaluate_models(
 ) -> EvaluationReport:
     """Train, tune on validation data, and compare all models on held-out data."""
 
-    train_full_x, test_x, train_full_y, test_y = train_test_split(
-        features,
-        target,
-        test_size=0.2,
-        stratify=target,
-        random_state=random_state,
-    )
-    train_x, validation_x, train_y, validation_y = train_test_split(
-        train_full_x,
-        train_full_y,
-        test_size=0.25,
-        stratify=train_full_y,
-        random_state=random_state,
-    )
+    split_indices = split_dataset(features, target, random_state)
+    train_x, validation_x, test_x = (features.iloc[split_indices[name]] for name in ('train', 'validation', 'test'))
+    train_y, validation_y, test_y = (target.iloc[split_indices[name]] for name in ('train', 'validation', 'test'))
 
     scaler = StandardScaler()
     train_scaled = scaler.fit_transform(train_x)
@@ -293,6 +299,12 @@ def evaluate_models(
             "test": len(test_x),
         },
         random_state=random_state,
+        split_indices=split_indices,
+        duplicate_feature_rows=int(features.duplicated().sum()),
+        dataset_fingerprint=hashlib.sha256(
+            pd.util.hash_pandas_object(features, index=False).to_numpy().tobytes()
+            + pd.util.hash_pandas_object(target, index=False).to_numpy().tobytes()
+        ).hexdigest(),
     )
 
 
@@ -351,6 +363,9 @@ def save_artifacts(report: EvaluationReport, output_path: str | Path) -> list[Pa
                 "random_state": report.random_state,
                 "split_sizes": report.split_sizes,
                 "thresholds": report.thresholds,
+                "split_strategy": "stratified_group_60_20_20",
+                "duplicate_feature_rows": report.duplicate_feature_rows,
+                "dataset_fingerprint": report.dataset_fingerprint,
             },
             indent=2,
             ensure_ascii=False,

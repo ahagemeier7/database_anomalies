@@ -3,7 +3,7 @@ Seed test anomalies into the FraudOps system.
 
 Two modes:
   --mode direct   (default) Insert directly into anomalies_history — instant, no pipeline needed.
-  --mode source             Insert into credit_card_transactions — triggers full CDC→Kafka→ML pipeline.
+  --mode source             Insert into creditcard_transactions — triggers full CDC→Kafka→ML pipeline.
 
 Examples:
   python scripts/seed_anomalies.py --count 10
@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 
 import psycopg2
 import psycopg2.extras
+from psycopg2 import sql
 
 # ── Connection strings ──────────────────────────────────────────────
 SOURCE_DB = "postgresql://postgres:postgres@localhost:5432/db_real"
@@ -61,21 +62,13 @@ def seed_direct(count: int, fraud_only: bool) -> None:
     conn = psycopg2.connect(INTERNAL_DB)
     cur = conn.cursor()
 
-    # Find highest existing alert_id to avoid conflicts
-    cur.execute("SELECT max(alert_id) FROM anomalies_history")
-    max_id_row = cur.fetchone()[0]
-    if max_id_row and max_id_row.startswith("ALRT-"):
-        base = int(max_id_row.replace("ALRT-", "").replace("SEED-", "")) + 1
-    else:
-        base = 1
-
     inserted = 0
     for i in range(count):
         row_id = 900000 + i  # fake source ID range
         is_fraud = fraud_only or random.random() < 0.7  # 70% fraud if mixed
         raw_event = _generate_raw_event(row_id, fraud=is_fraud)
 
-        alert_id = f"ALRT-SEED-{base + i:06d}"
+        alert_id = f"ALRT-SEED-{uuid.uuid4().hex}"
         ts = _now_iso()
 
         cur.execute(
@@ -88,9 +81,9 @@ def seed_direct(count: int, fraud_only: bool) -> None:
             (
                 alert_id,
                 ts,
-                "credit_card_transactions",
-                "source-postgres.public.credit_card_transactions",
-                "IsolationForest_v1",
+                "creditcard_transactions",
+                "source-postgres.public.creditcard_transactions",
+                "synthetic-demo",
                 "pending_revision",
                 psycopg2.extras.Json(raw_event),
             ),
@@ -111,11 +104,11 @@ def seed_source(count: int, table: str) -> None:
     cur = conn.cursor()
 
     # Get max id from existing data
-    cur.execute(f"SELECT max(id) FROM {table}")
+    cur.execute(sql.SQL("SELECT max(id) FROM {}").format(sql.Identifier(table)))
     max_id = cur.fetchone()[0] or 0
 
     # Read a few random rows as templates
-    cur.execute(f"SELECT * FROM {table} ORDER BY random() LIMIT %s", (count,))
+    cur.execute(sql.SQL("SELECT * FROM {} ORDER BY random() LIMIT %s").format(sql.Identifier(table)), (count,))
     rows = cur.fetchall()
     col_names = [desc[0] for desc in cur.description]
 
@@ -137,11 +130,11 @@ def seed_source(count: int, table: str) -> None:
         # Force Class to be 1 (fraud) or random
         row_dict["Class"] = 1 if random.random() < 0.7 else 0
 
-        columns = ", ".join(row_dict.keys())
-        placeholders = ", ".join(["%s"] * len(row_dict))
+        columns = sql.SQL(", ").join(sql.Identifier(column) for column in row_dict)
+        placeholders = sql.SQL(", ").join(sql.Placeholder() for _ in row_dict)
         values = list(row_dict.values())
 
-        cur.execute(f"INSERT INTO {table} ({columns}) VALUES ({placeholders})", values)
+        cur.execute(sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(sql.Identifier(table), columns, placeholders), values)
         inserted += 1
 
     conn.commit()
@@ -159,7 +152,7 @@ def main():
                         help="direct = insert into anomalies_history (instant); source = insert into source table (full pipeline)")
     parser.add_argument("--count", type=int, default=5,
                         help="Number of anomalies to insert (default: 5)")
-    parser.add_argument("--table", default="credit_card_transactions",
+    parser.add_argument("--table", default="creditcard_transactions",
                         help="Source table name (only for --mode source)")
     parser.add_argument("--fraud-only", action="store_true",
                         help="Only insert fraud rows (only for --mode direct)")

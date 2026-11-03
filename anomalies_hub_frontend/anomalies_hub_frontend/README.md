@@ -1,73 +1,33 @@
-# React + TypeScript + Vite
+# FraudOps Hub — frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Interface React, TypeScript e Vite para revisar alertas, consultar estatísticas, retreinar modelos e gerenciar versões.
 
-Currently, two official plugins are available:
+## Executar com a arquitetura completa
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Na raiz do repositório:
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+docker compose --profile seed up --build -d
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Abra http://localhost:3000. O Nginx encaminha `/api` ao backend dentro da rede Docker. Os dados da demonstração e suas limitações estão no [README principal](../../readme.md).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Desenvolvimento local
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Use Node.js 22.12+ e mantenha o backend do Compose em execução. Nesta pasta:
+
+```bash
+npm ci
+npm run dev
 ```
+
+O Vite encaminha `/api` para `http://localhost:8000`. O valor padrão de `VITE_API_BASE_URL` é `/api`; o `.env.example` documenta essa configuração. Uma URL absoluta pode ser configurada em um `.env` local, desde que a API permita a origem no CORS.
+
+## Verificar
+
+```bash
+npm run lint
+npm run build
+```
+
+A tela de versões informa quando o Random Forest está indisponível e impede sua seleção. As estatísticas do Hub são calculadas sobre revisões humanas; o benchmark offline fica documentado na raiz do projeto.

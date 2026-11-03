@@ -16,6 +16,12 @@ class AnomalyHandler:
     self.sender_email = os.getenv("SENDER_EMAIL")
     self.reciever_email = os.getenv("RECIEVER_EMAIL")
     self.password = os.getenv("EMAIL_PASSWORD")
+    self.email_enabled = os.getenv("EMAIL_ENABLED", "false").lower() == "true"
+    self.smtp_timeout = float(os.getenv("SMTP_TIMEOUT_SECONDS", "10"))
+    if self.smtp_timeout <= 0:
+      raise ValueError("SMTP_TIMEOUT_SECONDS must be positive")
+    if self.email_enabled and not all((self.sender_email, self.reciever_email, self.password)):
+      raise ValueError("Email is enabled but its credentials are incomplete")
 
     self.db_engine = get_db_engine()
 
@@ -44,12 +50,14 @@ class AnomalyHandler:
           f"Model: {model} | Action: Dispatching Email..."
         )
 
-      self._save_to_db(event_json)
+      inserted = self._save_to_db(event_json)
+      if not inserted or not self.email_enabled:
+        continue
 
       msg = self._email_assembler(event_json)
 
       try:
-        with smtplib.SMTP_SSL('smtp.gmail.com',465) as smtp:
+        with smtplib.SMTP_SSL('smtp.gmail.com',465, timeout=self.smtp_timeout) as smtp:
           smtp.login(self.sender_email,self.password)
           smtp.send_message(msg)
       except Exception as e:
@@ -185,8 +193,10 @@ class AnomalyHandler:
 
       try:
           with self.db_engine.connect() as conn:
-              conn.execute(query, params)
+              result = conn.execute(query, params)
               conn.commit()
           logging.info(f"Anomaly[{params['alert_id']}] successfully saved to database.")
+          return result.rowcount == 1
       except Exception as e:
           logging.error(f"Database insertion failed for anomaly [{params['alert_id']}]: {e}")
+          raise

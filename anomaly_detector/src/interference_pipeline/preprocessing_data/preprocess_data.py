@@ -10,8 +10,10 @@ class DynamicPreprocessor:
     translator_path = translator_path or f"models/{table_name}_translator.pkl"
     self.translator: DictVectorizer = joblib.load(translator_path)
 
-    # Load scaler if available — models trained after the StandardScaler
-    # introduction will have it; legacy models work without it.
+    # An explicitly versioned scaler is required: silently omitting it would
+    # change the input space expected by the saved model.
+    if scaler_path is not None and not os.path.isfile(scaler_path):
+      raise FileNotFoundError(f"Scaler not found: {scaler_path}")
     scaler_path = scaler_path or f"models/{table_name}_scaler.pkl"
     if scaler_path and os.path.exists(scaler_path):
       self.scaler = joblib.load(scaler_path)

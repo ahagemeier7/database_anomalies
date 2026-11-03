@@ -15,6 +15,8 @@ export default function ModelVersionsPage() {
   const [modeSaving, setModeSaving] = useState(false);
   const [modeError, setModeError] = useState<string | null>(null);
   const [modelTrained, setModelTrained] = useState<boolean>(false);
+  const [rfAvailable, setRfAvailable] = useState(false);
+  const [configReady, setConfigReady] = useState(false);
   const [activeVersion, setActiveVersion] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -35,11 +37,13 @@ export default function ModelVersionsPage() {
     fraudService.getPipelineConfig(tableName)
       .then(data => {
         setInferenceMode((data.inference_mode as 'if' | 'rf' | 'hybrid') || 'hybrid');
-        setModelTrained(Boolean(data.model_trained || data.active_model_version));
+        setModelTrained(Boolean(data.model_trained));
+        setRfAvailable(Boolean(data.rf_available));
+        setConfigReady(true);
         setActiveVersion(data.active_model_version || null);
         setModeError(null);
       })
-      .catch(() => setModeError('Could not load the current inference mode.'));
+      .catch(() => { setConfigReady(false); setModeError('Could not load the current inference mode.'); });
   };
 
   useEffect(() => {
@@ -51,6 +55,7 @@ export default function ModelVersionsPage() {
       .then(() => {
         if (active) {
           setLoading(true);
+          setConfigReady(false);
           setError(null);
         }
         return fraudService.getModelVersions(tableName);
@@ -69,12 +74,14 @@ export default function ModelVersionsPage() {
       .then(data => {
         if (!active) return;
         setInferenceMode((data.inference_mode as 'if' | 'rf' | 'hybrid') || 'hybrid');
-        setModelTrained(Boolean(data.model_trained || data.active_model_version));
+        setModelTrained(Boolean(data.model_trained));
+        setRfAvailable(Boolean(data.rf_available));
+        setConfigReady(true);
         setActiveVersion(data.active_model_version || null);
         setModeError(null);
       })
       .catch(() => {
-        if (active) setModeError('Could not load the current inference mode.');
+        if (active) { setConfigReady(false); setModeError('Could not load the current inference mode.'); }
       });
 
     return () => { active = false; };
@@ -87,6 +94,7 @@ export default function ModelVersionsPage() {
       const response = await fraudService.activateModelVersion(tableName, version);
       toast(`Activated ${response.active_version} for ${tableName}`, 'success');
       fetchVersions();
+      fetchPipelineConfig();
     } catch {
       toast('Failed to activate selected version.', 'error');
     } finally {
@@ -147,13 +155,14 @@ export default function ModelVersionsPage() {
               <select
                 value={inferenceMode}
                 onChange={(event) => handleInferenceModeChange(event.target.value as 'if' | 'rf' | 'hybrid')}
-                disabled={modeSaving}
+                disabled={modeSaving || !configReady}
                 className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <option value="if">Isolation Forest</option>
-                <option value="rf">Random Forest</option>
+                <option value="rf" disabled={!rfAvailable}>Random Forest</option>
                 <option value="hybrid">Hybrid</option>
               </select>
+              {!rfAvailable && configReady && <p className="text-xs text-slate-500">Train Random Forest with reviewed examples to enable this option. Hybrid uses Isolation Forest while Random Forest is unavailable.</p>}
               {modeSaving && <p className="text-xs text-slate-500">Saving...</p>}
               {modeError && <p className="text-xs text-rose-600">{modeError}</p>}
             </div>
@@ -195,7 +204,7 @@ export default function ModelVersionsPage() {
                 </Button>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-2 text-sm text-gray-600">
+              <div className="grid gap-2 break-all sm:grid-cols-2 text-sm text-gray-600">
                 <div>
                   <p className="font-semibold">Translator</p>
                   <p>{version.translator_path}</p>
