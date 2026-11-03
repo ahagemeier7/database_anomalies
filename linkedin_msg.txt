@@ -2,7 +2,7 @@ Quero compartilhar um projeto experimental que desenvolvi para explorar a integr
 
 A solução demonstra um fluxo de ponta a ponta: alterações em uma tabela PostgreSQL são capturadas via CDC com Debezium e publicadas no Kafka. Neste protótipo, o detector processa eventos de inserção e snapshot em uma pipeline de detecção de anomalias. Os alertas são persistidos e disponibilizados em uma API e em um painel web, onde podem ser revisados por uma pessoa e usados no ciclo de retreinamento dos modelos.
 
-Também implementei um benchmark offline para comparar Isolation Forest, Random Forest e uma abordagem híbrida, que combina a detecção de padrões incomuns do Isolation Forest com a classificação supervisionada do Random Forest. Neste experimento, o modelo híbrido alcançou 95,56% de precisão e 87,76% de recall em um conjunto de teste separado.
+Também implementei um benchmark offline para comparar Isolation Forest, Random Forest e uma abordagem híbrida, que combina a detecção de padrões incomuns do Isolation Forest com a classificação supervisionada do Random Forest. Neste experimento, o modelo híbrido alcançou 97,62% de precisão e 83,67% de recall em um conjunto de teste separado.
 
 Esses números são experimentais: a amostra contém todas as fraudes do dataset utilizado e não representa a distribuição de um cenário real. O projeto é um estudo, não uma solução pronta para produção; ainda exigiria validação adicional, segurança, observabilidade e monitoramento contínuo.
 

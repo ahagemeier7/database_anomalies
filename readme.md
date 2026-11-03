@@ -100,6 +100,7 @@ python -m venv .venv
 # Linux ou macOS
 source .venv/bin/activate
 
+python -m pip install --upgrade pip==26.3
 python -m pip install -r requirements.txt
 ```
 
@@ -312,6 +313,7 @@ Essa é uma métrica operacional da revisão dos alertas, não uma avaliação c
 Instale as dependências do projeto e de teste e execute a suíte a partir da raiz:
 
 ```bash
+python -m pip install --upgrade pip==26.3
 python -m pip install -r requirements.txt -r anomalies_hub_backend/requirements.txt pytest
 pytest -q
 ```
