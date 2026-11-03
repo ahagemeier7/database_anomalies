@@ -105,3 +105,25 @@ def test_evaluation_compares_three_models_and_generates_artifacts(tmp_path):
         "evaluation_config.json",
     }
     assert all(path.is_file() and path.stat().st_size > 0 for path in generated_files)
+
+
+def test_identical_feature_vectors_stay_in_one_split():
+    rng = np.random.default_rng(7)
+    features = pd.DataFrame(np.repeat(rng.normal(size=(100, 2)), 3, axis=0), columns=['V1', 'Amount'])
+    target = pd.Series(np.repeat([0] * 80 + [1] * 20, 3))
+    splits = model_testing.split_dataset(features, target, random_state=42)
+    hashes = {name: set(pd.util.hash_pandas_object(features.iloc[indices], index=False)) for name, indices in splits.items()}
+    assert not (hashes['train'] & hashes['validation'])
+    assert not (hashes['train'] & hashes['test'])
+    assert not (hashes['validation'] & hashes['test'])
+    assert sorted(np.concatenate(list(splits.values()))) == list(range(300))
+    for indices in splits.values():
+        assert set(target.iloc[indices]) == {0, 1}
+
+
+def test_split_is_reproducible_with_same_seed():
+    features = pd.DataFrame({'V1': range(100)})
+    target = pd.Series([0] * 80 + [1] * 20)
+    first = model_testing.split_dataset(features, target, random_state=42)
+    second = model_testing.split_dataset(features, target, random_state=42)
+    assert all(np.array_equal(first[name], second[name]) for name in first)

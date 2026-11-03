@@ -1,5 +1,6 @@
 import json
 import sys
+from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
@@ -54,7 +55,11 @@ def get_pipeline_config(engine: Engine, target_table: str):
       return None
     # determine if a model is trained based on active_model_version presence
     result = dict(row)
-    result['model_trained'] = bool(result.get('active_model_version'))
+    version = conn.execute(text("SELECT translator_path, scaler_path, if_model_path, rf_model_path FROM model_versions WHERE target_table = :target_table AND version = :version"), {
+      "target_table": target_table, "version": result.get('active_model_version'),
+    }).mappings().first() if result.get('active_model_version') else None
+    result['model_trained'] = bool(version and all(version[key] and Path(version[key]).is_file() for key in ('translator_path', 'scaler_path', 'if_model_path')))
+    result['rf_available'] = bool(result['model_trained'] and version['rf_model_path'] and Path(version['rf_model_path']).is_file())
     return result
 
 
@@ -64,13 +69,17 @@ def update_pipeline_inference_mode(engine: Engine, target_table: str, inference_
   if normalized_mode not in {'if', 'rf', 'hybrid'}:
     raise ValueError("inference_mode must be one of: if, rf, hybrid")
 
+  config = get_pipeline_config(engine, target_table)
+  if not config:
+    raise LookupError("Pipeline not found")
+  if normalized_mode == 'rf' and not config['rf_available']:
+    raise ValueError("Random Forest is not available for the active version")
+
   with engine.begin() as conn:
     conn.execute(
       text("""
-        INSERT INTO pipelines_config (target_table, inference_mode)
-        VALUES (:target_table, :inference_mode)
-        ON CONFLICT (target_table)
-        DO UPDATE SET inference_mode = EXCLUDED.inference_mode
+        UPDATE pipelines_config SET inference_mode = :inference_mode
+        WHERE target_table = :target_table
       """),
       {"target_table": target_table, "inference_mode": normalized_mode}
     )
@@ -100,13 +109,20 @@ def get_model_versions(engine: Engine, target_table: str):
 def activate_model_version(engine: Engine, target_table: str, version: str):
   ensure_model_versions_schema(engine)
   with engine.begin() as conn:
-    version_exists = conn.execute(
-      text("SELECT 1 FROM model_versions WHERE target_table = :target_table AND version = :version"),
+    record = conn.execute(
+      text("SELECT translator_path, if_model_path, scaler_path, rf_model_path FROM model_versions WHERE target_table = :target_table AND version = :version"),
       {"target_table": target_table, "version": version}
-    ).scalar_one_or_none()
+    ).mappings().first()
 
-    if not version_exists:
-      raise ValueError("Model version not found")
+    if not record:
+      raise LookupError("Model version not found")
+    if not all(record[key] and Path(record[key]).is_file() for key in ('translator_path', 'if_model_path', 'scaler_path')):
+      raise ValueError("Model artifacts are missing")
+    mode = conn.execute(text("SELECT inference_mode FROM pipelines_config WHERE target_table = :target_table"), {"target_table": target_table}).scalar_one_or_none()
+    if mode is None:
+      raise LookupError("Pipeline not found")
+    if mode == 'rf' and not (record['rf_model_path'] and Path(record['rf_model_path']).is_file()):
+      raise ValueError("This version has no Random Forest; select Isolation Forest first")
 
     conn.execute(
       text("UPDATE model_versions SET is_active = false WHERE target_table = :target_table"),

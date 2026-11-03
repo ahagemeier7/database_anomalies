@@ -108,3 +108,74 @@ def test_one_class_random_forest_has_no_fraud_probability():
     worker.model_rf = OneClassRandomForest()
 
     assert worker._get_fraud_probability([[0.0]]) is None
+
+
+def test_failed_reload_preserves_previous_working_models(monkeypatch):
+    worker = Worker("test_table", "test", ["id"], inference_mode="rf")
+    previous_preprocessor, previous_if = object(), object()
+    worker.preprocessor = previous_preprocessor
+    worker.model_if = previous_if
+    worker.effective_inference_mode = "if"
+    worker.last_active_version = "v001"
+    monkeypatch.setattr(worker, "_sync_inference_mode_from_db", lambda: None)
+    monkeypatch.setattr(worker_module, "get_db_engine", lambda: object())
+    monkeypatch.setattr(worker_module, "get_active_model_version", lambda *args: {
+        "version": "v002", "translator_path": "new.pkl", "if_model_path": "new_if.pkl",
+        "scaler_path": "new_scaler.pkl", "rf_model_path": None,
+    })
+    monkeypatch.setattr(worker_module, "DynamicPreprocessor", lambda **kwargs: object())
+    monkeypatch.setattr(worker_module.joblib, "load", lambda path: object())
+    assert worker._load_models() is False
+    assert worker.preprocessor is previous_preprocessor
+    assert worker.model_if is previous_if
+    assert worker.effective_inference_mode == "if"
+    assert worker.last_active_version == "v001"
+
+
+def test_switch_to_if_clears_previous_rf(monkeypatch):
+    worker = Worker("test_table", "test", ["id"], inference_mode="if")
+    worker.model_rf = object()
+    monkeypatch.setattr(worker, "_sync_inference_mode_from_db", lambda: None)
+    monkeypatch.setattr(worker_module, "get_db_engine", lambda: object())
+    monkeypatch.setattr(worker_module, "get_active_model_version", lambda *args: None)
+    monkeypatch.setattr(worker_module, "DynamicPreprocessor", lambda **kwargs: object())
+    monkeypatch.setattr(worker_module.joblib, "load", lambda path: object())
+    assert worker._load_models() is True
+    assert worker.model_rf is None
+
+
+def test_explicit_missing_scaler_cannot_silently_change_preprocessing(tmp_path):
+    import joblib
+    from sklearn.feature_extraction import DictVectorizer
+    from src.interference_pipeline.preprocessing_data.preprocess_data import DynamicPreprocessor
+    translator = tmp_path / 'translator.pkl'
+    joblib.dump(DictVectorizer().fit([{'amount': 1.0}]), translator)
+    with pytest.raises(FileNotFoundError):
+        DynamicPreprocessor('transactions', [], str(translator), str(tmp_path / 'missing_scaler.pkl'))
+
+
+def test_failed_mode_change_is_retried_on_next_event(monkeypatch):
+    class ConfigEngine:
+        def connect(self): return self
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def execute(self, *args): return self
+        def mappings(self): return self
+        def first(self): return {'inference_mode': 'if'}
+    worker = Worker('transactions', 'test', ['id'], inference_mode='hybrid')
+    worker.preprocessor = object()
+    worker.effective_inference_mode = 'hybrid'
+    worker.loaded_inference_mode = 'hybrid'
+    monkeypatch.setattr(worker_module, 'get_db_engine', ConfigEngine)
+    reads = []
+    def read_active(*args):
+        reads.append(True)
+        if len(reads) == 1: raise ConnectionError('transient metadata failure')
+        return None
+    monkeypatch.setattr(worker_module, 'get_active_model_version', read_active)
+    monkeypatch.setattr(worker_module, 'DynamicPreprocessor', lambda **kwargs: object())
+    monkeypatch.setattr(worker_module.joblib, 'load', lambda path: object())
+    worker._sync_inference_mode_from_db(reload_models=True)
+    assert worker.effective_inference_mode == 'hybrid'
+    worker._sync_inference_mode_from_db(reload_models=True)
+    assert worker.effective_inference_mode == 'if'

@@ -2,11 +2,16 @@
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
+    restart: unless-stopped
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-log:/var/lib/zookeeper/log
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
+    restart: unless-stopped
     depends_on:
       - zookeeper
     ports:
@@ -18,6 +23,8 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    volumes:
+      - kafka-data:/var/lib/kafka/data
     healthcheck:
       test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server kafka:29092"]
       interval: 10s
@@ -27,6 +34,7 @@ services:
 
   postgres-source:
     image: postgres:15-alpine
+    restart: unless-stopped
     ports:
       - "127.0.0.1:5432:5432"
     environment:
@@ -34,6 +42,8 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=db_real
     command: ["postgres", "-c", "wal_level=logical"]
+    volumes:
+      - source-db-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d db_real"]
       interval: 3s
@@ -43,12 +53,15 @@ services:
 
   postgres-internal:
     image: postgres:15-alpine
+    restart: unless-stopped
     ports:
       - "127.0.0.1:5433:5432"
     environment:
       - POSTGRES_USER=admin_fraude
       - POSTGRES_PASSWORD=senha_segura
       - POSTGRES_DB=db_seguranca
+    volumes:
+      - internal-db-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin_fraude -d db_seguranca"]
       interval: 3s
@@ -58,6 +71,7 @@ services:
 
   kafka-connect:
     image: quay.io/debezium/connect:3.2
+    restart: unless-stopped
     container_name: kafka-connect
     ports:
       - "127.0.0.1:8083:8083"
@@ -67,9 +81,14 @@ services:
       - CONFIG_STORAGE_TOPIC=my_connect_configs
       - OFFSET_STORAGE_TOPIC=my_connect_offsets
       - STATUS_STORAGE_TOPIC=my_connect_statuses
+      - CONFIG_STORAGE_REPLICATION_FACTOR=1
+      - OFFSET_STORAGE_REPLICATION_FACTOR=1
+      - STATUS_STORAGE_REPLICATION_FACTOR=1
     depends_on:
-      - kafka
-      - postgres-source
+      kafka:
+        condition: service_healthy
+      postgres-source:
+        condition: service_healthy
 
   kafka-connect-setup:
     image: curlimages/curl:8.12.1
@@ -81,14 +100,21 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
+        set -eu
+        attempt=0
         until curl -sf http://kafka-connect:8083/connectors >/dev/null 2>&1; do
+          attempt=$$((attempt + 1))
+          if [ "$$attempt" -ge 60 ]; then
+            echo "Kafka Connect did not become ready within 300 seconds" >&2
+            exit 1
+          fi
           echo "Waiting for Kafka Connect to be ready..."
           sleep 5
         done
 
         if curl -sf http://kafka-connect:8083/connectors/source-postgres >/dev/null 2>&1; then
           echo "Connector source-postgres already exists. Updating configuration..."
-          curl -s -X PUT http://kafka-connect:8083/connectors/source-postgres/config \
+          curl -fsS --max-time 30 -X PUT http://kafka-connect:8083/connectors/source-postgres/config \
             -H 'Content-Type: application/json' \
             -d '{
               "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
@@ -109,7 +135,7 @@ services:
             }'
         else
           echo "Creating connector source-postgres..."
-          curl -s -X POST http://kafka-connect:8083/connectors \
+          curl -fsS --max-time 30 -X POST http://kafka-connect:8083/connectors \
             -H 'Content-Type: application/json' \
             -d '{
               "name": "source-postgres",
@@ -194,6 +220,9 @@ services:
       postgres-source:
         condition: service_healthy
 
+      postgres-internal:
+        condition: service_healthy
+
 #--================Handler================--#
 
   anomaly-handler:
@@ -204,6 +233,8 @@ services:
     restart: on-failure
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - EMAIL_ENABLED=${EMAIL_ENABLED:-false}
+      - SMTP_TIMEOUT_SECONDS=${SMTP_TIMEOUT_SECONDS:-10}
       - SENDER_EMAIL=${SENDER_EMAIL:-seu_email@gmail.com}
       - EMAIL_PASSWORD=${EMAIL_PASSWORD:-sua_senha_de_app}
       - RECIEVER_EMAIL=${RECIEVER_EMAIL:-equipe_fraude@empresa.com}
@@ -243,7 +274,8 @@ services:
       - ./anomaly_detector/src/models:/app/models
       - ./anomaly_detector/src:/app/src
     depends_on:
-      - postgres-internal
+      postgres-internal:
+        condition: service_healthy
 
   hub-frontend:
     build:
@@ -284,3 +316,10 @@ services:
         condition: service_healthy
     profiles:
       - seed
+
+volumes:
+  source-db-data:
+  internal-db-data:
+  kafka-data:
+  zookeeper-data:
+  zookeeper-log:

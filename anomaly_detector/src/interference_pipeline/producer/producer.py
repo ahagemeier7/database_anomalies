@@ -1,13 +1,6 @@
 import os
 import json
-import logging
 from confluent_kafka import Producer
-
-def delivery_report(err,msg):
-  if err is not None:
-    logging.error(f"Failed to send the message to kafka: {err}")
-  else:
-    logging.debug(f"Anomaly sent to topic {msg.topic()}")
 
 class AnomalyProducer:
   """
@@ -16,19 +9,25 @@ class AnomalyProducer:
   def __init__(self):
     self.kafka_server = os.getenv('KAFKA_BOOTSTRAP_SERVERS')
 
-    self.producer = Producer({'bootstrap.servers': self.kafka_server}) 
+    self.producer = Producer({
+      'bootstrap.servers': self.kafka_server,
+      'enable.idempotence': True,
+      'delivery.timeout.ms': 10000,
+    })
 
   def send_anomaly(self,topic:str,payload:dict):
-    try:
+    failures = []
 
-      message_bytes = json.dumps(payload).encode('utf-8')
+    def delivered(error, message):
+      if error is not None:
+        failures.append(str(error))
 
-      self.producer.produce(
-        topic=topic,
-        value=message_bytes,
-        callback=delivery_report
-      )
-
-      self.producer.flush()
-    except Exception as e:
-      logging.error("Faild to produce the kafka message")
+    self.producer.produce(
+      topic=topic,
+      value=json.dumps(payload).encode('utf-8'),
+      callback=delivered,
+    )
+    if self.producer.flush(10) != 0:
+      raise TimeoutError('Kafka delivery was not confirmed within 10 seconds')
+    if failures:
+      raise RuntimeError(f'Kafka delivery failed: {failures[0]}')

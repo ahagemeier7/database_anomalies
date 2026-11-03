@@ -14,6 +14,8 @@ def anomaly_consumer_kafka(topic:str,group_id:str):
     'bootstrap.servers' : bootstrap_server,
     'group.id': group_id,     
     'auto.offset.reset': 'earliest',
+    'enable.auto.commit': False,
+    'enable.auto.offset.store': False,
     'allow.auto.create.topics': True
   }
 
@@ -32,8 +34,7 @@ def anomaly_consumer_kafka(topic:str,group_id:str):
         if msg.error().code() in (KafkaError._PARTITION_EOF, KafkaError.UNKNOWN_TOPIC_OR_PART):
           continue 
         else:
-          logging.error(f"Kafka error: {msg.error()}")
-          break
+          raise RuntimeError(f"Kafka error: {msg.error()}")
     
       valor_byte = msg.value()
 
@@ -41,9 +42,12 @@ def anomaly_consumer_kafka(topic:str,group_id:str):
         data = json.loads(valor_byte.decode('utf-8'))
 
         yield data
+      # The handler must finish persistence before iteration resumes.
+      consumer.commit(message=msg, asynchronous=False)
 
   except Exception as e:
-    logging.error(f"An unexpected error occured while listening to kafka stream: {e}")
+    logging.exception("Kafka consumption failed; leaving the record uncommitted")
+    raise
   except KeyboardInterrupt:
     logging.warning("Shutting down the pipeline by user request")
   finally:

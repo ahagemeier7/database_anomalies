@@ -16,7 +16,7 @@ import time
 import logging
 
 import pandas as pd
-from sqlalchemy import create_engine, Engine, text
+from sqlalchemy import create_engine, Engine, text, inspect
 
 logging.basicConfig(
     level=logging.INFO,
@@ -145,13 +145,34 @@ def seed_dataset(
     log.info("Phase 1: inserting %d normal rows into %s ...",
              len(df_normal), target_table)
 
-    df_normal.to_sql(target_table, source_engine, if_exists="replace", index=False)
-
-    with source_engine.connect() as conn:
-        conn.execute(text(f"ALTER TABLE {target_table} ADD PRIMARY KEY (id);"))
-        conn.commit()
-
-    log.info("Phase 1 complete – %d normal rows inserted.", len(df_normal))
+    # A repeated demonstration must not drop a table tracked by Debezium.
+    # Resume phase 2 only when phase 1 already completed successfully.
+    if not target_table.replace('_', '').isalnum() or not target_table[0].isalpha():
+        raise ValueError('Invalid target table')
+    table_identifier = '"' + target_table + '"'
+    if not fraud_col.replace('_', '').isalnum() or not fraud_col[0].isalpha():
+        raise ValueError('Invalid fraud column')
+    fraud_identifier = '"' + fraud_col + '"'
+    table_exists = inspect(source_engine).has_table(target_table)
+    existing_count = 0
+    if table_exists:
+        with source_engine.connect() as conn:
+            existing_count = conn.execute(text(f'SELECT COUNT(*) FROM {table_identifier}')).scalar_one()
+            normal_count = conn.execute(text(f'SELECT COUNT(*) FROM {table_identifier} WHERE {fraud_identifier} = 0')).scalar_one()
+            fraud_count = conn.execute(text(f'SELECT COUNT(*) FROM {table_identifier} WHERE {fraud_identifier} = 1')).scalar_one()
+        if existing_count:
+            if normal_count != len(df_normal) or fraud_count not in (0, len(df_fraud)) or normal_count + fraud_count != existing_count:
+                raise RuntimeError('Source table contains other data; seed refuses to replace it')
+            if fraud_count == len(df_fraud):
+                log.info('Dataset is already seeded; keeping existing source rows.')
+                return
+            log.info('Normal rows already exist; resuming after phase 1.')
+    if not existing_count:
+        with source_engine.begin() as conn:
+            df_normal.to_sql(target_table, conn, if_exists='append' if table_exists else 'fail', index=False)
+            if not table_exists:
+                conn.execute(text(f'ALTER TABLE {table_identifier} ADD PRIMARY KEY (id)'))
+        log.info('Phase 1 complete ? %d normal rows inserted.', len(df_normal))
 
     # ------------------------------------------------------------------
     # Wait for worker pipeline to register

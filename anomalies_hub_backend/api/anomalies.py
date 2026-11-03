@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.engine import Engine
 
 from db.db import get_db_engine
@@ -33,8 +33,8 @@ def _database_unavailable_error() -> HTTPException:
 )
 def fetch_anomalies(
   status: str = "pending_revision",
-  limit: int = 25,
-  offset: int = 0,
+  limit: int = Query(25, ge=1, le=100),
+  offset: int = Query(0, ge=0),
   origin_table: str | None = None,
   db: Engine = Depends(get_db)
 ):
@@ -63,6 +63,8 @@ def update_anomaly(alert_id: str, payload: StatusUpdatePayload, db: Engine = Dep
   try:
     anomalies.update_status(db, alert_id, payload.status)
     return {"message": f"Alert {alert_id} updated to '{payload.status}'!"}
+  except LookupError:
+    raise HTTPException(status_code=404, detail="Alert not found.")
   except anomalies.DatabaseUnavailableError:
     raise _database_unavailable_error()
   except Exception as e:

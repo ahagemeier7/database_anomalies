@@ -8,7 +8,8 @@ from sqlalchemy import text
 from src.training_pipeline.db.db_source import get_db_engine as get_source_engine
 from src.training_pipeline.db.db_internal import get_db_engine as get_internal_engine
 from src.training_pipeline.workers.model_versioning import get_active_model_version
-from src.training_pipeline.workers.worker_models_initial import train_models
+from src.training_pipeline.workers.worker_models_initial import ensure_initial_models
+from src.training_pipeline.db.identifiers import quoted_table_name
 from src.interference_pipeline.worker import Worker
 
 load_dotenv()
@@ -25,12 +26,13 @@ def wait_for_seed_data(target_table: str, timeout: int = 600, interval: int = 3)
     container, so the worker waits here until Phase 1 completes.
     """
     engine = get_source_engine()
+    table_identifier = quoted_table_name(target_table)
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             with engine.connect() as conn:
                 count = conn.execute(
-                    text(f"SELECT COUNT(*) FROM {target_table}")
+                    text(f"SELECT COUNT(*) FROM {table_identifier}")
                 ).scalar()
                 if count and count > 0:
                     logging.info(
@@ -75,22 +77,9 @@ MODEL_VERSION = os.getenv("MODEL_VERSION")
 MODEL_INFERENCE_MODE = os.getenv("MODEL_INFERENCE_MODE", "hybrid")
 
 
-if not os.path.exists(TRANSLATOR_PATH) or not os.path.exists(MODEL_PATH):
-  try:
-    #Training the models
-    train_models(target_table=TARGET_TABLE, columns_to_ignore=COLUMNS_TO_IGNORE)
-  except Exception as e:
-    logging.error(f"An error has occured while training the models: {e}")
-    sys.exit(1)
-
-# Check the internal DB for an active model version and register it if missing.
-try:
-  internal_engine = get_internal_engine()
-  active_version = get_active_model_version(internal_engine, TARGET_TABLE)
-  if not active_version:
-    logging.warning("No active model version found in internal DB after training for '%s'.", TARGET_TABLE)
-except Exception as exc:
-  logging.warning("Could not verify active model version in internal DB: %s", exc)
+# Files and database metadata form one model registration. Rebuild it when
+# the internal database was reset, even if old model files still exist.
+ensure_initial_models(TARGET_TABLE, COLUMNS_TO_IGNORE)
 
 worker = Worker(
   target_table=TARGET_TABLE,

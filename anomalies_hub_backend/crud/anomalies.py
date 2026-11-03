@@ -60,7 +60,9 @@ def update_status(engine: Engine, alert_id: str, status: str):
   try:
     query = text("UPDATE anomalies_history SET status = :status WHERE alert_id = :alert_id")
     with engine.connect() as conn:
-      conn.execute(query, {"status": status, "alert_id": alert_id})
+      result = conn.execute(query, {"status": status, "alert_id": alert_id})
+      if result.rowcount == 0:
+        raise LookupError("Alert not found")
       conn.commit()
   except SQLAlchemyError as error:
     _raise_database_unavailable("updating an anomaly status", error)

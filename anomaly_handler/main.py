@@ -14,3 +14,4 @@ try:
   handler.handle_anomalies()
 except Exception as e:
   logging.error(f"An error has occured during the anomaly handling: {e}")
+  raise

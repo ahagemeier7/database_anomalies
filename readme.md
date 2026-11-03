@@ -73,12 +73,12 @@ Para a comparação rápida dos modelos, basta Python 3.12+. Para executar a arq
 | Kafka UI | http://localhost:8080 | Monitoramento de tópicos Kafka |
 | Kafka Connect | http://localhost:8083 | Gerenciamento de conectores Debezium |
 | Kafka | localhost:9092 | Broker Kafka |
-| Zookeeper | localhost:2181 | Orquestrador Kafka |
+| Zookeeper | Somente na rede Docker | Orquestrador Kafka |
 
 ### Email (Anomaly Handler)
 O Compose usa valores de demonstração para os bancos e e-mails fictícios. Não reutilize essas senhas fora do ambiente local. As portas publicadas pelo Compose ficam vinculadas a `127.0.0.1` no computador host.
 
-Para configurar e-mail real, crie um arquivo `.env` local (ignorado pelo Git) com `SENDER_EMAIL`, `EMAIL_PASSWORD` e `RECIEVER_EMAIL`. O Compose lê essas variáveis sem precisar editar o arquivo versionado. O envio de e-mail não é necessário para persistir e revisar os alertas.
+Para configurar e-mail real, crie um arquivo `.env` local (ignorado pelo Git) com `SENDER_EMAIL`, `EMAIL_PASSWORD` e `RECIEVER_EMAIL`, e defina `EMAIL_ENABLED=true`. O envio fica desabilitado por padrão. `SMTP_TIMEOUT_SECONDS` controla o timeout da conexão, com padrão de 10 segundos. O Compose lê essas variáveis sem precisar editar o arquivo versionado. O envio de e-mail não é necessário para persistir e revisar os alertas.
 
 ## Instalação e Execução
 
@@ -115,13 +115,13 @@ A tabela informa explicitamente `Anomalies Detected`, que representa todos os re
 
 #### Resultados reproduzidos no conjunto de teste
 
-Execução com `creditcard_small.csv` (15.492 registros, 492 fraudes), semente 42 e divisão estratificada em treino (9.294), validação (3.099) e teste (3.099). Os thresholds foram escolhidos na validação; os valores abaixo são do teste separado.
+Execução com `creditcard_small.csv` (15.492 registros, 492 fraudes), semente 42 e divisão estratificada por grupos de features idênticas em treino (9.295), validação (3.099) e teste (3.098). Os thresholds foram escolhidos na validação; os valores abaixo são do teste separado. Registros com features idênticas permanecem no mesmo conjunto, por isso as proporções 60/20/20 são aproximadas. Nesta execução, o híbrido teve o mesmo resultado do Random Forest, sem ganho adicional no teste.
 
 | Modelo | Precision | Recall | F1-score | Alertas (TP + FP) | Fraudes detectadas (TP) | FP | FN |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Isolation Forest | 62,07% | 55,10% | 58,38% | 87 | 54 | 33 | 44 |
-| Random Forest | 94,51% | 87,76% | 91,01% | 91 | 86 | 5 | 12 |
-| Híbrido (IF + RF) | 95,56% | 87,76% | 91,49% | 90 | 86 | 4 | 12 |
+| Isolation Forest | 58,49% | 63,27% | 60,78% | 106 | 62 | 44 | 36 |
+| Random Forest | 97,62% | 83,67% | 90,11% | 84 | 82 | 2 | 16 |
+| Híbrido (IF + RF) | 97,62% | 83,67% | 90,11% | 84 | 82 | 2 | 16 |
 
 ![Comparação de precision, recall e F1 dos modelos no teste offline](docs/model_testing/metrics_comparison.png)
 
@@ -142,19 +142,21 @@ Para avaliar outro CSV numérico e binário:
 python scripts/model_testing/model_testing.py --dataset caminho/dataset.csv --target-column Class --ignore-columns Time
 ```
 
+O arquivo `evaluation_config.json` registra a estratégia de separação, a quantidade de duplicatas, uma impressão digital dos dados avaliados e os thresholds.
+
 Essa comparação é um benchmark offline dos modelos. Ela não executa Kafka, CDC, Detector, Handler ou Hub.
 
 ### Configuração do ambiente
 
-O `docker-compose.yml` contém valores de demonstração para os bancos. O `.env.example` documenta as variáveis; se você criar um `.env` local, o Compose usa `SENDER_EMAIL`, `EMAIL_PASSWORD` e `RECIEVER_EMAIL` para o envio de alertas por e-mail. O arquivo `.env` é ignorado pelo Git e não deve ser versionado.
+O `docker-compose.yml` contém valores de demonstração para os bancos. O `.env.example` documenta somente as variáveis opcionais de e-mail consumidas pelo Compose: `EMAIL_ENABLED`, `SMTP_TIMEOUT_SECONDS`, `SENDER_EMAIL`, `EMAIL_PASSWORD` e `RECIEVER_EMAIL`. O arquivo `.env` é ignorado pelo Git e não deve ser versionado.
 
 ### Opção 2: demonstração completa com Docker Compose
 ```bash
 # Depois de clonar o repositório, entre na pasta do projeto
 cd database_anomalies
 
-# Iniciar todos os serviços
-docker compose up --build
+# Primeira execução: iniciar serviços e inserir o dataset de demonstração
+docker compose --profile seed up --build -d
 
 # Em outro terminal, para ver logs
 docker compose logs -f
@@ -185,6 +187,16 @@ docker compose --profile seed up --build -d
 
 Depois, consulte o dashboard em `http://localhost:3000` ou a API em `http://localhost:8000/api/anomalies`.
 
+## Persistência e reprocessamento
+
+PostgreSQL, Kafka e Zookeeper usam volumes nomeados. `docker compose down` preserva esses volumes; `docker compose up -d` retoma o ambiente. O seed preserva uma demonstração já carregada e retoma a segunda fase quando apenas os registros normais já existem. Ele recusa substituir uma tabela com outra quantidade de dados.
+
+Os modelos ficam em `anomaly_detector/src/models`. Se o banco interno for recriado ou os artefatos da versão ativa estiverem ausentes, o detector realiza um novo treinamento inicial e registra uma nova versão; arquivos antigos sozinhos não substituem os metadados do banco. Após um reset, essa versão é treinada com os dados presentes na origem naquele momento.
+
+Os consumidores confirmam offsets depois do processamento. Uma falha de gravação ou publicação interrompe o serviço, e o Compose o reinicia para reprocessar o evento. A persistência de alertas ignora IDs já existentes, preservando revisões humanas. Essa entrega admite repetição; e-mail é uma notificação opcional, com tentativa somente na primeira inserção, e não tem garantia de entrega.
+
+Para recomeçar o experimento, `docker compose down -v` remove os volumes de dados. Os arquivos locais de modelos permanecem; com o banco interno novo, eles serão substituídos por uma versão registrada ao iniciar novamente com o profile `seed`.
+
 ## Estrutura do projeto
 - anomalies_hub_backend - Backend da aplicação web, feito com python e FastAPI
 - anomalies_hub_frontend - Frontend da aplicação. Feito com React + Vite
@@ -212,8 +224,8 @@ Banco de dados origem (cdc) -> debezium -> Kafka -> anomaly detector -> kafka ->
 2. Confirme no Kafka Connect (`http://localhost:8083/connectors/source-postgres/status`) que o conector está em execução.
 3. Abra o Kafka UI (`http://localhost:8080`) para observar o tópico `source-postgres.public.creditcard_transactions` e, quando houver alerta, `detected_anomalies`.
 4. Abra o Hub (`http://localhost:3000`) e revise os alertas pendentes. Marque um como fraude confirmada ou falso positivo.
-5. Após registrar ao menos uma fraude confirmada e um falso positivo, acione o retreinamento pelo Hub ou por `POST /api/pipelines/creditcard_transactions/retrain`; a nova versão registra métricas supervisionadas.
-6. Para usar os dois modelos, selecione o modo `hybrid` no Hub depois do retreinamento. A API equivalente é `POST /api/pipelines/creditcard_transactions/inference-mode` com `{ "inference_mode": "hybrid" }`; a pipeline inicia em `if` enquanto não há modelo supervisionado válido.
+5. Após registrar ao menos uma fraude confirmada e um falso positivo, acione o retreinamento pelo Hub ou por `POST /api/pipelines/creditcard_transactions/retrain`. Com poucos exemplos, o Random Forest é treinado sem métricas de validação; essas métricas só são registradas quando treino e teste comportam ambas as classes.
+6. Para usar os dois modelos, selecione o modo `hybrid` no Hub depois do retreinamento. A API equivalente é `POST /api/pipelines/creditcard_transactions/inference-mode` com `{ "inference_mode": "hybrid" }`; a pipeline inicia em `if` enquanto não há modelo supervisionado válido. A seleção de `rf` é rejeitada pela API e desabilitada no Hub quando o artefato supervisionado está ausente. Um carregamento malsucedido preserva o último conjunto válido de modelos.
 
 Este é um MVP acadêmico. As credenciais do Compose são locais, os resultados não representam validação para produção e cada alerta deve passar por revisão humana.
 
@@ -265,7 +277,7 @@ A documentação interativa da API (Swagger UI) está disponível em:
 
 | Método | Path | Descrição |
 |--------|------|-----------|
-| `GET` | `/api/anomalies` | Lista anomalias paginadas. Query params: `status` (default: `pending_revision`), `limit`, `offset`, `origin_table` |
+| `GET` | `/api/anomalies` | Lista anomalias paginadas. Query params: `status` (default: `pending_revision`), `limit` (1 a 100), `offset` (>= 0), `origin_table` |
 | `PUT` | `/api/anomalies/{alert_id}/status` | Atualiza o status de um alerta. Body: `{ "status": "confirmed_fraud" \| "false_positive" \| "pending_revision" }` |
 | `GET` | `/api/anomalies/stats` | Retorna contagens por status, gráfico dos últimos 7 dias e precision baseada nos alertas revisados |
 | `GET` | `/api/anomalies/stats/by-table` | Retorna contagens agrupadas por tabela e precision baseada nos alertas revisados |
@@ -340,7 +352,8 @@ Aguarde ~30 segundos após `docker compose up` para o Kafka inicializar completa
 - [x] Cobertura inicial de testes (pytest)
 - [ ] CI/CD com GitHub Actions
 - [ ] Logs estruturados em JSON
-- [ ] Health checks nos containers
+- [x] Health checks de PostgreSQL e Kafka; serviços dependentes aguardam prontidão
+- [ ] Ampliar health checks para os demais serviços
 - [ ] Otimização multi-stage dos Dockerfiles
 
 Sugestões são bem-vindas! Abra uma issue ou envie um PR.
